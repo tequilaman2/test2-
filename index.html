@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <title>AR Viewer</title>
+    
+    <!-- AR.js и A-Frame библиотеки -->
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+    
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .carousel {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 15px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 15px;
+        z-index: 1000;
+        width: 90%;
+        max-width: 500px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .carousel::-webkit-scrollbar {
+        display: none;
+      }
+
+      .carousel-item {
+        flex: 0 0 auto;
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid transparent;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .carousel-item img {
+        max-width: 100%;
+        max-height: 100%;
+      }
+
+      .carousel-item:hover {
+        transform: scale(1.05);
+      }
+
+      .carousel-item.active {
+        border-color: #007AFF;
+      }
+
+      .loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 18px;
+        z-index: 2000;
+      }
+
+      .loading.hidden {
+        display: none;
+      }
+
+      .ar-hint {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px 25px;
+        border-radius: 10px;
+        text-align: center;
+        z-index: 1000;
+        font-size: 16px;
+        transition: opacity 0.3s ease;
+      }
+
+      .ar-hint.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Скрываем стандартный интерфейс AR.js */
+      .a-enter-vr {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading" id="loading">Загрузка AR...</div>
+    <div class="ar-hint" id="ar-hint">Выберите модель внизу экрана</div>
+
+    <!-- A-Frame сцена -->
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3_parity_6_5;"
+      renderer="logarithmicDepthBuffer: true; precision: medium;"
+      vr-mode-ui="enabled: false"
+    >
+      <!-- Маркер для QR-кода -->
+      <a-marker id="qr-marker" type="barcode" value="0">
+        <!-- 3D модель будет добавлена динамически -->
+        <a-entity id="model-container" position="0 0.5 0" rotation="-90 0 0" scale="1 1 1"></a-entity>
+        
+        <!-- AR кнопки -->
+        <a-entity position="0 0 0">
+          <!-- YouTube кнопка -->
+          <a-plane 
+            id="youtube-button" 
+            position="1 0 0" 
+            rotation="-90 0 0" 
+            width="0.5" 
+            height="0.5" 
+            material="src: site.png; transparent: true;"
+            class="clickable"
+          ></a-plane>
+          
+          <!-- Wikipedia кнопка -->
+          <a-plane 
+            id="wiki-button" 
+            position="-1 0 0" 
+            rotation="-90 0 0" 
+            width="0.5" 
+            height="0.5" 
+            material="src: em.png; transparent: true;"
+            class="clickable"
+          ></a-plane>
+        </a-entity>
+      </a-marker>
+      
+      <!-- Универсальный маркер для любого QR-кода -->
+      <a-marker id="qr-marker-universal" type="pattern" preset="hiro">
+        <!-- Дублируем содержимое для универсального маркера -->
+        <a-entity id="model-container-universal" position="0 0.5 0" rotation="-90 0 0" scale="1 1 1"></a-entity>
+        
+        <!-- AR кнопки -->
+        <a-entity position="0 0 0">
+          <!-- YouTube кнопка -->
+          <a-plane 
+            id="youtube-button-universal" 
+            position="1 0 0" 
+            rotation="-90 0 0" 
+            width="0.5" 
+            height="0.5" 
+            material="src: site.png; transparent: true;"
+            class="clickable"
+          ></a-plane>
+          
+          <!-- Wikipedia кнопка -->
+          <a-plane 
+            id="wiki-button-universal" 
+            position="-1 0 0" 
+            rotation="-90 0 0" 
+            width="0.5" 
+            height="0.5" 
+            material="src: em.png; transparent: true;"
+            class="clickable"
+          ></a-plane>
+        </a-entity>
+      </a-marker>
+      
+      <!-- Камера с курсором для взаимодействия -->
+      <a-entity camera>
+        <a-cursor></a-cursor>
+      </a-entity>
+    </a-scene>
+
+    <!-- Карусель выбора моделей -->
+    <div class="carousel">
+      <div class="carousel-item active" data-model="models/cat.glb">
+        <img src="thumbnails/cat.jpg" alt="Cat" onerror="this.src='models/cat.glb'">
+      </div>
+      <div class="carousel-item" data-model="models/volvo_240.glb">
+        <img src="thumbnails/volvo.jpg" alt="Volvo" onerror="this.src='models/volvo_240.glb'">
+      </div>
+      <div class="carousel-item" data-model="models/apple.glb">
+        <img src="thumbnails/apple.jpg" alt="Apple" onerror="this.src='models/apple.glb'">
+      </div>
+    </div>
+
+    <script>
+      // Регистрируем компонент для обработки кликов
+      AFRAME.registerComponent('clickable', {
+        init: function() {
+          const el = this.el;
+          
+          el.addEventListener('click', function() {
+            const id = el.id;
+            
+            if (id === 'youtube-button' || id === 'youtube-button-universal') {
+              window.open('https://www.youtube.com', '_blank');
+              console.log('YouTube button clicked');
+            } else if (id === 'wiki-button' || id === 'wiki-button-universal') {
+              window.open('https://www.wikipedia.org', '_blank');
+              console.log('Wikipedia button clicked');
+            }
+          });
+        }
+      });
+      
+      document.addEventListener('DOMContentLoaded', async function() {
+        const loading = document.querySelector('#loading');
+        const arHint = document.querySelector('#ar-hint');
+        const carouselItems = document.querySelectorAll('.carousel-item');
+        const modelContainer = document.querySelector('#model-container');
+        const modelContainerUniversal = document.querySelector('#model-container-universal');
+        
+        let currentModel = null;
+        let currentModelUniversal = null;
+        let loadingTimeout = null;
+        const LOADING_TIMEOUT = 10000; // 10 секунд максимальное время отображения загрузки
+
+        // Функция для управления загрузчиком
+        function showLoading(message = 'Загрузка AR...') {
+          // Очищаем предыдущий таймаут, если он есть
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+          }
+          
+          // Показываем загрузчик с указанным сообщением
+          loading.textContent = message;
+          loading.classList.remove('hidden');
+          
+          // Устанавливаем таймаут для автоматического скрытия загрузчика
+          loadingTimeout = setTimeout(() => {
+            console.warn('Таймаут загрузки, скрываем индикатор');
+            loading.classList.add('hidden');
+          }, LOADING_TIMEOUT);
+        }
+
+        function hideLoading() {
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = null;
+          }
+          loading.classList.add('hidden');
+        }
+
+        // Функция для смены модели
+        function switchModel(modelPath) {
+          showLoading('Загрузка модели...');
+          
+          // Удаляем предыдущие модели, если они есть
+          if (currentModel && currentModel.parentNode) {
+            currentModel.parentNode.removeChild(currentModel);
+          }
+          
+          if (currentModelUniversal && currentModelUniversal.parentNode) {
+            currentModelUniversal.parentNode.removeChild(currentModelUniversal);
+          }
+          
+          // Создаем новую модель для основного маркера
+          currentModel = document.createElement('a-entity');
+          currentModel.setAttribute('gltf-model', modelPath);
+          currentModel.setAttribute('scale', '0.5 0.5 0.5');
+          currentModel.setAttribute('rotation', '0 0 0');
+          currentModel.setAttribute('position', '0 0 0');
+          
+          // Создаем новую модель для универсального маркера
+          currentModelUniversal = document.createElement('a-entity');
+          currentModelUniversal.setAttribute('gltf-model', modelPath);
+          currentModelUniversal.setAttribute('scale', '0.5 0.5 0.5');
+          currentModelUniversal.setAttribute('rotation', '0 0 0');
+          currentModelUniversal.setAttribute('position', '0 0 0');
+          
+          // Добавляем модели в контейнеры
+          modelContainer.appendChild(currentModel);
+          modelContainerUniversal.appendChild(currentModelUniversal);
+          
+          // Обработчик загрузки модели
+          currentModel.addEventListener('model-loaded', () => {
+            console.log('Модель загружена:', modelPath);
+            hideLoading();
+          });
+          
+          // Обработчик ошибки загрузки
+          currentModel.addEventListener('model-error', () => {
+            console.error('Ошибка загрузки модели:', modelPath);
+            loading.textContent = 'Ошибка загрузки модели';
+            setTimeout(hideLoading, 3000);
+          });
+        }
+
+        // Инициализация
+        try {
+          // Обработчик выбора модели
+          carouselItems.forEach(item => {
+            item.addEventListener('click', () => {
+              carouselItems.forEach(i => i.classList.remove('active'));
+              item.classList.add('active');
+              
+              // Меняем модель
+              switchModel(item.dataset.model);
+              
+              // Обновляем подсказку
+              arHint.textContent = 'Наведите камеру на QR-код';
+              arHint.classList.remove('hidden');
+            });
+          });
+          
+          // Проверяем, является ли устройство мобильным
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          if (!isMobile) {
+            loading.textContent = 'AR доступен только на мобильных устройствах';
+            arHint.textContent = 'AR доступен только на мобильных устройствах';
+          } else {
+            loading.classList.add('hidden');
+          }
+          
+          // Устанавливаем активную модель по умолчанию
+          if (carouselItems.length > 0) {
+            const firstItem = carouselItems[0];
+            switchModel(firstItem.dataset.model);
+          }
+          
+          // Обработка ошибок соединения
+          window.addEventListener('online', () => {
+            console.log('Соединение восстановлено');
+            // Перезагружаем текущую модель
+            const activeItem = document.querySelector('.carousel-item.active');
+            if (activeItem) {
+              switchModel(activeItem.dataset.model);
+            }
+          });
+          
+          window.addEventListener('offline', () => {
+            console.warn('Соединение потеряно');
+            arHint.textContent = 'Отсутствует подключение к интернету';
+          });
+          
+          // Обработка маркеров
+          const qrMarker = document.querySelector('#qr-marker');
+          const qrMarkerUniversal = document.querySelector('#qr-marker-universal');
+          
+          [qrMarker, qrMarkerUniversal].forEach(marker => {
+            marker.addEventListener('markerFound', () => {
+              console.log('QR-код обнаружен!');
+              arHint.classList.add('hidden');
+            });
+            
+            marker.addEventListener('markerLost', () => {
+              console.log('QR-код потерян');
+              arHint.textContent = 'Наведите камеру на QR-код';
+              arHint.classList.remove('hidden');
+            });
+          });
+          
+        } catch (error) {
+          console.error('Ошибка инициализации:', error);
+          arHint.textContent = 'Ошибка инициализации: ' + error.message;
+          hideLoading();
+        }
+      });
+      
+      // Добавляем поддержку для распознавания любого QR-кода
+      AFRAME.registerComponent('qr-detector', {
+        init: function() {
+          // Настраиваем AR.js для работы с любыми QR-кодами
+          const scene = document.querySelector('a-scene');
+          
+          // Добавляем обработчик события для определения QR-кодов
+          scene.addEventListener('loaded', () => {
+            // Настраиваем дополнительные типы маркеров
+            const arSystem = scene.systems['arjs'];
+            if (arSystem && arSystem._arController) {
+              console.log('Настраиваем расширенное определение QR-кодов');
+              
+              // Добавляем поддержку различных типов QR-кодов
+              const types = ['3x3', '3x3_HAMMING63', '3x3_PARITY65', '4x4', '4x4_BCH_13_9_3', '4x4_BCH_13_5_5'];
+              types.forEach(type => {
+                if (arSystem._arController.setMatrixCodeType) {
+                  try {
+                    arSystem._arController.setMatrixCodeType(type);
+                    console.log('Добавлен тип QR-кода:', type);
+                  } catch (e) {
+                    console.warn('Не удалось добавить тип QR-кода:', type, e);
+                  }
+                }
+              });
+            }
+          });
+        }
+      });
+      
+      // Добавляем компонент на сцену
+      document.addEventListener('DOMContentLoaded', () => {
+        const scene = document.querySelector('a-scene');
+        scene.setAttribute('qr-detector', '');
+      });
+    </script>
+  </body>
+</html>

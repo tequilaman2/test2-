@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Quick Look Gallery</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 600;
+        }
+
+        .model-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .model-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+            cursor: pointer;
+        }
+
+        .model-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .model-preview {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+        }
+
+        .model-info {
+            padding: 15px;
+        }
+
+        .model-title {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .model-description {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .ar-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: #007AFF;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            margin-top: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        .ar-button:hover {
+            background: #0056b3;
+        }
+
+        .ar-button.hidden {
+            display: none;
+        }
+
+        .device-message {
+            text-align: center;
+            padding: 20px;
+            background: #fff3cd;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .device-message.visible {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .model-gallery {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AR Quick Look Gallery</h1>
+        
+        <div class="device-message" id="device-message">
+            Для просмотра AR-контента используйте устройство Apple с iOS 12 или новее
+        </div>
+
+        <div class="model-gallery">
+            <div class="model-card" data-model="models/cat.usdz" data-preview="thumbnails/cat.jpg">
+                <img src="thumbnails/cat.jpg" alt="Кошка" class="model-preview">
+                <div class="model-info">
+                    <h3 class="model-title">Кошка</h3>
+                    <p class="model-description">3D модель кошки для AR просмотра</p>
+                </div>
+            </div>
+
+            <div class="model-card" data-model="models/volvo_240.usdz" data-preview="thumbnails/volvo.jpg">
+                <img src="thumbnails/volvo.jpg" alt="Volvo 240" class="model-preview">
+                <div class="model-info">
+                    <h3 class="model-title">Volvo 240</h3>
+                    <p class="model-description">3D модель автомобиля Volvo 240</p>
+                </div>
+            </div>
+
+            <div class="model-card" data-model="models/apple.usdz" data-preview="thumbnails/apple.jpg">
+                <img src="thumbnails/apple.jpg" alt="Яблоко" class="model-preview">
+                <div class="model-info">
+                    <h3 class="model-title">Яблоко</h3>
+                    <p class="model-description">3D модель яблока</p>
+                </div>
+            </div>
+        </div>
+
+        <a href="#" class="ar-button" id="ar-button" rel="ar">
+            Открыть в AR
+        </a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const modelCards = document.querySelectorAll('.model-card');
+            const arButton = document.getElementById('ar-button');
+            const deviceMessage = document.getElementById('device-message');
+            let selectedModel = null;
+
+            // Проверяем, является ли устройство iOS
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            
+            if (!isIOS) {
+                deviceMessage.classList.add('visible');
+                arButton.classList.add('hidden');
+            }
+
+            // Обработчик выбора модели
+            modelCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    // Убираем выделение со всех карточек
+                    modelCards.forEach(c => c.style.border = 'none');
+                    
+                    // Выделяем выбранную карточку
+                    this.style.border = '2px solid #007AFF';
+                    
+                    // Получаем путь к модели
+                    selectedModel = this.dataset.model;
+                    
+                    // Обновляем ссылку AR
+                    arButton.href = selectedModel;
+                    
+                    // Показываем кнопку AR
+                    arButton.classList.remove('hidden');
+                });
+            });
+
+            // Обработчик нажатия на кнопку AR
+            arButton.addEventListener('click', function(e) {
+                if (!selectedModel) {
+                    e.preventDefault();
+                    alert('Пожалуйста, выберите модель для просмотра в AR');
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
