@@ -127,12 +127,12 @@
     <!-- A-Frame сцена -->
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3_parity_6_5;"
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono;"
       renderer="logarithmicDepthBuffer: true; precision: medium;"
       vr-mode-ui="enabled: false"
     >
-      <!-- Маркер для QR-кода -->
-      <a-marker id="qr-marker" type="barcode" value="0">
+      <!-- Маркер Hiro -->
+      <a-marker id="hiro-marker" type="pattern" preset="hiro">
         <!-- 3D модель будет добавлена динамически -->
         <a-entity id="model-container" position="0 0.5 0" rotation="-90 0 0" scale="1 1 1"></a-entity>
         
@@ -152,37 +152,6 @@
           <!-- Wikipedia кнопка -->
           <a-plane 
             id="wiki-button" 
-            position="-1 0 0" 
-            rotation="-90 0 0" 
-            width="0.5" 
-            height="0.5" 
-            material="src: em.png; transparent: true;"
-            class="clickable"
-          ></a-plane>
-        </a-entity>
-      </a-marker>
-      
-      <!-- Универсальный маркер для любого QR-кода -->
-      <a-marker id="qr-marker-universal" type="pattern" preset="hiro">
-        <!-- Дублируем содержимое для универсального маркера -->
-        <a-entity id="model-container-universal" position="0 0.5 0" rotation="-90 0 0" scale="1 1 1"></a-entity>
-        
-        <!-- AR кнопки -->
-        <a-entity position="0 0 0">
-          <!-- YouTube кнопка -->
-          <a-plane 
-            id="youtube-button-universal" 
-            position="1 0 0" 
-            rotation="-90 0 0" 
-            width="0.5" 
-            height="0.5" 
-            material="src: site.png; transparent: true;"
-            class="clickable"
-          ></a-plane>
-          
-          <!-- Wikipedia кнопка -->
-          <a-plane 
-            id="wiki-button-universal" 
             position="-1 0 0" 
             rotation="-90 0 0" 
             width="0.5" 
@@ -221,10 +190,10 @@
           el.addEventListener('click', function() {
             const id = el.id;
             
-            if (id === 'youtube-button' || id === 'youtube-button-universal') {
+            if (id === 'youtube-button') {
               window.open('https://www.youtube.com', '_blank');
               console.log('YouTube button clicked');
-            } else if (id === 'wiki-button' || id === 'wiki-button-universal') {
+            } else if (id === 'wiki-button') {
               window.open('https://www.wikipedia.org', '_blank');
               console.log('Wikipedia button clicked');
             }
@@ -237,10 +206,8 @@
         const arHint = document.querySelector('#ar-hint');
         const carouselItems = document.querySelectorAll('.carousel-item');
         const modelContainer = document.querySelector('#model-container');
-        const modelContainerUniversal = document.querySelector('#model-container-universal');
         
         let currentModel = null;
-        let currentModelUniversal = null;
         let loadingTimeout = null;
         const LOADING_TIMEOUT = 10000; // 10 секунд максимальное время отображения загрузки
 
@@ -274,32 +241,20 @@
         function switchModel(modelPath) {
           showLoading('Загрузка модели...');
           
-          // Удаляем предыдущие модели, если они есть
+          // Удаляем предыдущую модель, если она есть
           if (currentModel && currentModel.parentNode) {
             currentModel.parentNode.removeChild(currentModel);
           }
           
-          if (currentModelUniversal && currentModelUniversal.parentNode) {
-            currentModelUniversal.parentNode.removeChild(currentModelUniversal);
-          }
-          
-          // Создаем новую модель для основного маркера
+          // Создаем новую модель
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
           currentModel.setAttribute('scale', '0.5 0.5 0.5');
           currentModel.setAttribute('rotation', '0 0 0');
           currentModel.setAttribute('position', '0 0 0');
           
-          // Создаем новую модель для универсального маркера
-          currentModelUniversal = document.createElement('a-entity');
-          currentModelUniversal.setAttribute('gltf-model', modelPath);
-          currentModelUniversal.setAttribute('scale', '0.5 0.5 0.5');
-          currentModelUniversal.setAttribute('rotation', '0 0 0');
-          currentModelUniversal.setAttribute('position', '0 0 0');
-          
-          // Добавляем модели в контейнеры
+          // Добавляем модель в контейнер
           modelContainer.appendChild(currentModel);
-          modelContainerUniversal.appendChild(currentModelUniversal);
           
           // Обработчик загрузки модели
           currentModel.addEventListener('model-loaded', () => {
@@ -327,7 +282,7 @@
               switchModel(item.dataset.model);
               
               // Обновляем подсказку
-              arHint.textContent = 'Наведите камеру на QR-код';
+              arHint.textContent = 'Наведите камеру на маркер Hiro';
               arHint.classList.remove('hidden');
             });
           });
@@ -362,21 +317,18 @@
             arHint.textContent = 'Отсутствует подключение к интернету';
           });
           
-          // Обработка маркеров
-          const qrMarker = document.querySelector('#qr-marker');
-          const qrMarkerUniversal = document.querySelector('#qr-marker-universal');
+          // Обработка маркера Hiro
+          const hiroMarker = document.querySelector('#hiro-marker');
           
-          [qrMarker, qrMarkerUniversal].forEach(marker => {
-            marker.addEventListener('markerFound', () => {
-              console.log('QR-код обнаружен!');
-              arHint.classList.add('hidden');
-            });
-            
-            marker.addEventListener('markerLost', () => {
-              console.log('QR-код потерян');
-              arHint.textContent = 'Наведите камеру на QR-код';
-              arHint.classList.remove('hidden');
-            });
+          hiroMarker.addEventListener('markerFound', () => {
+            console.log('Маркер Hiro обнаружен!');
+            arHint.classList.add('hidden');
+          });
+          
+          hiroMarker.addEventListener('markerLost', () => {
+            console.log('Маркер Hiro потерян');
+            arHint.textContent = 'Наведите камеру на маркер Hiro';
+            arHint.classList.remove('hidden');
           });
           
         } catch (error) {
@@ -384,42 +336,6 @@
           arHint.textContent = 'Ошибка инициализации: ' + error.message;
           hideLoading();
         }
-      });
-      
-      // Добавляем поддержку для распознавания любого QR-кода
-      AFRAME.registerComponent('qr-detector', {
-        init: function() {
-          // Настраиваем AR.js для работы с любыми QR-кодами
-          const scene = document.querySelector('a-scene');
-          
-          // Добавляем обработчик события для определения QR-кодов
-          scene.addEventListener('loaded', () => {
-            // Настраиваем дополнительные типы маркеров
-            const arSystem = scene.systems['arjs'];
-            if (arSystem && arSystem._arController) {
-              console.log('Настраиваем расширенное определение QR-кодов');
-              
-              // Добавляем поддержку различных типов QR-кодов
-              const types = ['3x3', '3x3_HAMMING63', '3x3_PARITY65', '4x4', '4x4_BCH_13_9_3', '4x4_BCH_13_5_5'];
-              types.forEach(type => {
-                if (arSystem._arController.setMatrixCodeType) {
-                  try {
-                    arSystem._arController.setMatrixCodeType(type);
-                    console.log('Добавлен тип QR-кода:', type);
-                  } catch (e) {
-                    console.warn('Не удалось добавить тип QR-кода:', type, e);
-                  }
-                }
-              });
-            }
-          });
-        }
-      });
-      
-      // Добавляем компонент на сцену
-      document.addEventListener('DOMContentLoaded', () => {
-        const scene = document.querySelector('a-scene');
-        scene.setAttribute('qr-detector', '');
       });
     </script>
   </body>
