@@ -134,7 +134,7 @@
       <!-- Маркер Hiro -->
       <a-marker id="hiro-marker" type="pattern" preset="hiro">
         <!-- 3D модель будет добавлена динамически -->
-        <a-entity id="model-container" position="0 0.5 0" rotation="-90 0 0" scale="1 1 1"></a-entity>
+        <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="2 2 2"></a-entity>
         
         <!-- AR кнопки -->
         <a-entity position="0 0 0">
@@ -249,8 +249,8 @@
           // Создаем новую модель
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
-          currentModel.setAttribute('scale', '0.5 0.5 0.5');
-          currentModel.setAttribute('rotation', '0 0 0');
+          currentModel.setAttribute('scale', '1 1 1'); // Используем масштаб контейнера
+          currentModel.setAttribute('rotation', '0 0 0'); // Модель будет ориентирована как задано в контейнере
           currentModel.setAttribute('position', '0 0 0');
           
           // Добавляем модель в контейнер
