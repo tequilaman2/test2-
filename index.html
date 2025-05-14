@@ -170,7 +170,7 @@
       <!-- Маркер Hiro -->
       <a-marker id="hiro-marker" type="pattern" preset="hiro">
         <!-- Контейнер для модели с вращением -->
-        <a-entity id="model-wrapper" position="0 0.5 0">
+        <a-entity id="model-wrapper" position="0 0.75 0">
           <a-entity id="model-container" rotation="0 0 0" scale="1 1 1"></a-entity>
         </a-entity>
         
@@ -300,6 +300,30 @@
           loading.classList.add('hidden');
         }
 
+        // Коррекция ориентации моделей в зависимости от их типа
+        function getModelCorrection(modelPath) {
+          if (modelPath.includes('cat.glb')) {
+            return {
+              rotation: "0 0 0",
+              position: "0 -0.2 0",
+              scale: "1.5 1.5 1.5"
+            };
+          } else if (modelPath.includes('model.glb')) {
+            return {
+              rotation: "0 0 0",
+              position: "0 -0.2 0",
+              scale: "1.5 1.5 1.5"
+            };
+          }
+          
+          // Значения по умолчанию
+          return {
+            rotation: "0 0 0",
+            position: "0 0 0",
+            scale: "1.5 1.5 1.5"
+          };
+        }
+
         // Функция для смены модели
         function switchModel(modelPath) {
           showLoading('Загрузка модели...');
@@ -309,11 +333,15 @@
             currentModel.parentNode.removeChild(currentModel);
           }
           
+          // Получаем параметры коррекции для выбранной модели
+          const correction = getModelCorrection(modelPath);
+          
           // Создаем новую модель
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
-          currentModel.setAttribute('scale', '1.5 1.5 1.5');
-          currentModel.setAttribute('position', '0 0 0');
+          currentModel.setAttribute('scale', correction.scale);
+          currentModel.setAttribute('position', correction.position);
+          currentModel.setAttribute('rotation', correction.rotation);
           currentModel.setAttribute('mixin', 'spin'); // Добавляем вращение
           
           // Добавляем модель в контейнер
