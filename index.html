@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-touch-fullscreen" content="yes">
-    <title>AR Viewer</title>
+    <title>Просмотр 3D-моделей в AR</title>
     
     <!-- AR.js и A-Frame библиотеки -->
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
@@ -49,33 +49,46 @@
         overflow: hidden;
       }
 
-      .carousel {
+      .nav-container {
         position: fixed;
         bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
         display: flex;
-        gap: 15px;
-        padding: 10px;
-        background: rgba(0, 0, 0, 0.7);
-        border-radius: 15px;
+        align-items: center;
+        justify-content: center;
+        width: 95%;
+        max-width: 600px;
         z-index: 1000;
-        width: 90%;
-        max-width: 500px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
       }
 
-      .carousel::-webkit-scrollbar {
-        display: none;
+      .carousel-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+      }
+
+      .carousel {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 15px;
+        padding: 10px;
+        width: 100%;
+        max-width: 500px;
+        overflow: hidden;
+        backdrop-filter: blur(5px);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
 
       .carousel-item {
         flex: 0 0 auto;
-        width: 100px;
-        height: 100px;
+        width: 120px;
+        height: 120px;
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.3s ease;
@@ -85,6 +98,41 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        margin: 0 15px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        position: relative;
+      }
+
+      .carousel-item .model-name {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 4px;
+        font-size: 12px;
+        text-align: center;
+        z-index: 10;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+      
+      .carousel-item:hover .model-name,
+      .carousel-item.active .model-name {
+        opacity: 1;
+      }
+
+      .carousel-item a-scene {
+        width: 100%;
+        height: 100%;
+        border-radius: 6px;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      .carousel-item a-entity {
+        transform: translateY(10px);
       }
 
       .carousel-item img {
@@ -94,10 +142,68 @@
 
       .carousel-item:hover {
         transform: scale(1.05);
+        box-shadow: 0 4px 15px rgba(0, 120, 255, 0.3);
       }
 
       .carousel-item.active {
         border-color: #007AFF;
+        transform: scale(1.05);
+        box-shadow: 0 0 15px rgba(0, 120, 255, 0.5);
+      }
+
+      .nav-button {
+        width: 50px;
+        height: 50px;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin: 0 10px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        z-index: 1001;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .nav-button img {
+        width: 30px;
+        height: 30px;
+        transition: transform 0.2s ease;
+        filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
+      }
+
+      .nav-button:hover {
+        background: rgba(0, 0, 0, 0.9);
+        transform: scale(1.1);
+        border-color: rgba(255, 255, 255, 0.4);
+      }
+
+      .nav-button:hover img {
+        transform: scale(1.2);
+        filter: brightness(1.2) drop-shadow(0 0 3px rgba(255, 255, 255, 0.7));
+      }
+
+      .nav-button:active, .nav-button.active {
+        transform: scale(0.95);
+        background: rgba(0, 123, 255, 0.5);
+        border-color: rgba(0, 123, 255, 0.7);
+      }
+      
+      .nav-button:active img, .nav-button.active img {
+        transform: scale(0.9);
+        filter: brightness(1.5);
+      }
+
+      @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+        100% { transform: scale(1); }
+      }
+
+      .carousel-item.active a-scene {
+        animation: pulse 2s infinite ease-in-out;
       }
 
       .loading {
@@ -146,20 +252,32 @@
     </style>
   </head>
   <body>
-    <div class="loading" id="loading">Загрузка AR...</div>
-    <div class="ar-hint" id="ar-hint">Выберите модель внизу экрана</div>
+    <div class="loading" id="loading">Загрузка AR-сцены...</div>
+    <div class="ar-hint" id="ar-hint">Используйте стрелки для переключения между моделями</div>
 
     <!-- A-Frame сцена -->
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; maxDetectionRate: 60; canvasWidth: 1000; canvasHeight: 1000; displayWidth: 1000; displayHeight: 1000;"
-      renderer="logarithmicDepthBuffer: true; precision: medium;"
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; maxDetectionRate: 60; canvasWidth: 1000; canvasHeight: 1000; displayWidth: 1000; displayHeight: 1000; smoothTolerance: 0.01; smoothThreshold: 5; smoothCount: 10;"
+      renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true; alpha: true; colorManagement: true;"
       vr-mode-ui="enabled: false"
     >
-      <!-- Маркер Hiro -->
-      <a-marker id="hiro-marker" type="pattern" preset="hiro">
+      <!-- Маркер Hiro с улучшенными параметрами стабилизации -->
+      <a-marker id="hiro-marker" type="pattern" preset="hiro" smooth="true" smoothCount="10" smoothTolerance=".01" smoothThreshold="5">
         <!-- 3D модель будет добавлена динамически -->
-        <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="2 2 2"></a-entity>
+        <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="2 2 2" animation="property: position; to: 0 0.001 0; dir: alternate; dur: 1000; loop: true; easing: easeInOutSine;"></a-entity>
+        
+        <!-- Плоскость с анимацией для эффекта обнаружения маркера -->
+        <a-plane 
+          id="marker-effect"
+          position="0 -0.1 0" 
+          rotation="-90 0 0" 
+          width="1.2" 
+          height="1.2" 
+          color="#007AFF" 
+          opacity="0.2"
+          animation="property: scale; from: 1 1 1; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true; easing: easeInOutSine">
+        </a-plane>
         
         <!-- AR кнопки -->
         <a-entity position="0 0 0">
@@ -188,25 +306,85 @@
       </a-marker>
       
       <!-- Камера с курсором для взаимодействия -->
-      <a-entity camera>
+      <a-entity camera look-controls="enabled: false;" position="0 0 0">
         <a-cursor></a-cursor>
       </a-entity>
     </a-scene>
 
-    <!-- Карусель выбора моделей -->
-    <div class="carousel">
-      <div class="carousel-item active" data-model="models/cat.glb">
-        <img src="thumbnails/cat.jpg" alt="Cat" onerror="this.src='models/cat.glb'">
-      </div>
-      <div class="carousel-item" data-model="models/volvo_240.glb">
-        <img src="thumbnails/volvo.jpg" alt="Volvo" onerror="this.src='models/volvo_240.glb'">
-      </div>
-      <div class="carousel-item" data-model="models/apple.glb">
-        <img src="thumbnails/apple.jpg" alt="Apple" onerror="this.src='models/apple.glb'">
+    <!-- Навигация и карусель моделей -->
+    <div class="nav-container">
+      <div class="carousel-wrapper">
+        <div class="nav-button" id="prev-button">
+          <img src="L.png" alt="Предыдущая модель">
+        </div>
+        <div class="carousel">
+          <div class="carousel-item active" data-model="models/cat.glb">
+            <div class="model-name">Кот</div>
+            <a-scene embedded background="transparent: true" renderer="antialias: true; alpha: true; colorManagement: true; precision: high;" loading-screen="enabled: false">
+              <a-entity position="0 0 0" rotation="0 -45 0" scale="1.5 1.5 1.5" gltf-model="models/cat.glb" animation="property: rotation; to: 0 315 0; dur: 8000; easing: linear; loop: true"></a-entity>
+              <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+              <a-entity light="type: directional; intensity: 0.8; castShadow: true" position="1 1 1"></a-entity>
+              <a-entity camera position="0 0 4" look-at="0 0 0" movement-smoother="factor: 0.1"></a-entity>
+            </a-scene>
+          </div>
+          <div class="carousel-item" data-model="models/model.glb">
+            <div class="model-name">Стул</div>
+            <a-scene embedded background="transparent: true" renderer="antialias: true; alpha: true; colorManagement: true; precision: high;" loading-screen="enabled: false">
+              <a-entity position="0 0 0" rotation="0 -45 0" scale="1.2 1.2 1.2" gltf-model="models/model.glb" animation="property: rotation; to: 0 315 0; dur: 8000; easing: linear; loop: true"></a-entity>
+              <a-entity light="type: ambient; intensity: 0.7;"></a-entity>
+              <a-entity light="type: directional; intensity: 0.8; castShadow: true" position="1 1 1"></a-entity>
+              <a-entity camera position="0 0 4" look-at="0 0 0" movement-smoother="factor: 0.1"></a-entity>
+            </a-scene>
+          </div>
+        </div>
+        <div class="nav-button" id="next-button">
+          <img src="R.png" alt="Следующая модель">
+        </div>
       </div>
     </div>
 
     <script>
+      // Функция для сглаживания движений и стабилизации трекинга
+      AFRAME.registerComponent('movement-smoother', {
+        schema: {
+          factor: {type: 'number', default: 0.2}
+        },
+        
+        init: function() {
+          this.lastPosition = new THREE.Vector3();
+          this.lastPosition.copy(this.el.object3D.position);
+          
+          this.lastRotation = new THREE.Euler();
+          this.lastRotation.copy(this.el.object3D.rotation);
+          
+          this.smoothedPosition = new THREE.Vector3();
+          this.smoothedPosition.copy(this.el.object3D.position);
+          
+          this.smoothedRotation = new THREE.Euler();
+          this.smoothedRotation.copy(this.el.object3D.rotation);
+        },
+        
+        tick: function() {
+          // Сглаживаем положение
+          this.smoothedPosition.x += (this.el.object3D.position.x - this.smoothedPosition.x) * this.data.factor;
+          this.smoothedPosition.y += (this.el.object3D.position.y - this.smoothedPosition.y) * this.data.factor;
+          this.smoothedPosition.z += (this.el.object3D.position.z - this.smoothedPosition.z) * this.data.factor;
+          
+          // Сглаживаем вращение
+          this.smoothedRotation.x += (this.el.object3D.rotation.x - this.smoothedRotation.x) * this.data.factor;
+          this.smoothedRotation.y += (this.el.object3D.rotation.y - this.smoothedRotation.y) * this.data.factor;
+          this.smoothedRotation.z += (this.el.object3D.rotation.z - this.smoothedRotation.z) * this.data.factor;
+          
+          // Применяем сглаженные значения
+          this.el.object3D.position.copy(this.smoothedPosition);
+          this.el.object3D.rotation.copy(this.smoothedRotation);
+          
+          // Сохраняем последнее положение и вращение
+          this.lastPosition.copy(this.el.object3D.position);
+          this.lastRotation.copy(this.el.object3D.rotation);
+        }
+      });
+      
       // Регистрируем компонент для обработки кликов
       AFRAME.registerComponent('clickable', {
         init: function() {
@@ -231,6 +409,55 @@
         const arHint = document.querySelector('#ar-hint');
         const carouselItems = document.querySelectorAll('.carousel-item');
         const modelContainer = document.querySelector('#model-container');
+        const prevButton = document.querySelector('#prev-button');
+        const nextButton = document.querySelector('#next-button');
+        let isModelSwitching = false; // Флаг для предотвращения одновременных переключений
+        
+        // Дополнительные настройки для плавной работы
+        let lastFrameTime = 0;
+        const FRAME_THROTTLE = 1000 / 30; // Ограничение до 30 FPS для стабильности
+        
+        // Функция для ограничения частоты кадров
+        function throttleRAF(callback) {
+          return function() {
+            const currentTime = performance.now();
+            if (currentTime - lastFrameTime >= FRAME_THROTTLE) {
+              lastFrameTime = currentTime;
+              callback();
+            }
+          };
+        }
+        
+        // Применяем ограничение частоты кадров для более стабильного отображения
+        if (typeof window.requestAnimationFrame !== 'undefined') {
+          const originalRAF = window.requestAnimationFrame;
+          window.requestAnimationFrame = function(callback) {
+            return originalRAF(throttleRAF(callback));
+          };
+        }
+        
+        // Инициализация миниатюр 3D моделей
+        setTimeout(() => {
+          // Даем время для загрузки и инициализации A-Frame
+          document.querySelectorAll('.carousel-item a-scene').forEach(scene => {
+            // Отключаем VR режим для миниатюр
+            scene.setAttribute('vr-mode-ui', 'enabled: false');
+            
+            // Оптимизация для производительности
+            const renderer = scene.renderer;
+            if (renderer) {
+              renderer.setPixelRatio(window.devicePixelRatio * 0.7);
+              
+              // Отключаем рендеринг неактивных миниатюр при прокрутке или взаимодействии
+              if (!scene.parentNode.classList.contains('active')) {
+                scene.setAttribute('pause-render', '');
+              }
+            }
+          });
+          
+          // Скрываем индикатор загрузки
+          hideLoading();
+        }, 800);
         
         // Отключаем диалоги AR.js
         if (window.AR && window.AR.context) {
@@ -272,19 +499,78 @@
 
         // Функция для смены модели
         function switchModel(modelPath) {
-          showLoading('Загрузка модели...');
-          
-          // Удаляем предыдущую модель, если она есть
-          if (currentModel && currentModel.parentNode) {
-            currentModel.parentNode.removeChild(currentModel);
+          // Если уже загружается, отменяем
+          if (window.currentlyLoading) {
+            return;
           }
           
+          window.currentlyLoading = true;
+          showLoading('Загрузка модели...');
+          
+          // Замедляем все анимации перед удалением для более плавного перехода
+          if (currentModel && currentModel.parentNode) {
+            // Сначала замедляем анимацию
+            currentModel.setAttribute('animation__scale', 'property: scale; to: 0 0 0; dur: 350; easing: easeInQuad');
+            
+            // Удаляем предыдущую модель после анимации
+            setTimeout(() => {
+              if (currentModel && currentModel.parentNode) {
+                currentModel.parentNode.removeChild(currentModel);
+              }
+              
+              // Сбрасываем все анимации перед созданием новой модели
+              modelContainer.removeAttribute('animation');
+              setTimeout(() => {
+                // Создаем новую модель
+                createNewModel(modelPath);
+                window.currentlyLoading = false;
+              }, 50);
+            }, 400);
+          } else {
+            // Если нет текущей модели, просто создаем новую
+            createNewModel(modelPath);
+            window.currentlyLoading = false;
+          }
+          
+          // Обновляем активную миниатюру
+          document.querySelectorAll('.carousel-item').forEach(item => {
+            // Изменяем скорость вращения активной модели в миниатюре
+            if (item.dataset.model === modelPath) {
+              try {
+                const modelEntity = item.querySelector('a-entity[gltf-model]');
+                if (modelEntity) {
+                  modelEntity.setAttribute('animation', 'property: rotation; to: 0 315 0; dur: 3000; easing: linear; loop: true');
+                }
+              } catch (e) {
+                console.error('Ошибка при обновлении анимации миниатюры:', e);
+              }
+            } else {
+              try {
+                const modelEntity = item.querySelector('a-entity[gltf-model]');
+                if (modelEntity) {
+                  modelEntity.setAttribute('animation', 'property: rotation; to: 0 315 0; dur: 8000; easing: linear; loop: true');
+                }
+              } catch (e) {
+                console.error('Ошибка при обновлении анимации миниатюры:', e);
+              }
+            }
+          });
+        }
+        
+        // Функция создания новой модели
+        function createNewModel(modelPath) {
           // Создаем новую модель
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
-          currentModel.setAttribute('scale', '1 1 1'); // Используем масштаб контейнера
-          currentModel.setAttribute('rotation', '0 0 0'); // Модель будет ориентирована как задано в контейнере
+          currentModel.setAttribute('scale', '0 0 0'); // Начальный масштаб для анимации
+          currentModel.setAttribute('rotation', '0 0 0');
           currentModel.setAttribute('position', '0 0 0');
+          
+          // Добавляем дополнительную сглаженную анимацию и улучшенную физику
+          currentModel.setAttribute('animation-mixer', 'loop: repeat; clampWhenFinished: true;');
+          
+          // Добавляем компонент сглаживания движения
+          currentModel.setAttribute('movement-smoother', 'factor: 0.15');
           
           // Добавляем модель в контейнер
           modelContainer.appendChild(currentModel);
@@ -293,6 +579,15 @@
           currentModel.addEventListener('model-loaded', () => {
             console.log('Модель загружена:', modelPath);
             hideLoading();
+            
+            // Анимация появления модели с эластичным сглаживанием
+            currentModel.setAttribute('animation__scale', 'property: scale; to: 1 1 1; dur: 800; easing: easeOutElastic');
+            currentModel.setAttribute('animation__rotation', 'property: rotation; from: 0 -10 0; to: 0 0 0; dur: 600; easing: easeOutQuad');
+            
+            // Добавляем небольшое плавное колебание для естественной анимации
+            setTimeout(() => {
+              currentModel.setAttribute('animation__hover', 'property: position; from: 0 0 0; to: 0 0.01 0; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine');
+            }, 1000);
           });
           
           // Обработчик ошибки загрузки
@@ -301,6 +596,74 @@
             loading.textContent = 'Ошибка загрузки модели';
             setTimeout(hideLoading, 3000);
           });
+        }
+
+        // Функция для перехода к следующей модели
+        function goToNextModel() {
+          if (isModelSwitching) return; // Предотвращаем одновременные переключения
+          isModelSwitching = true;
+          
+          const currentActive = document.querySelector('.carousel-item.active');
+          let nextItem = currentActive.nextElementSibling;
+          
+          // Если нет следующего элемента, переходим к первому (циклическая навигация)
+          if (!nextItem || !nextItem.classList.contains('carousel-item')) {
+            nextItem = document.querySelector('.carousel-item:first-child');
+          }
+          
+          // Анимируем кнопку
+          nextButton.classList.add('active');
+          setTimeout(() => {
+            nextButton.classList.remove('active');
+          }, 200);
+          
+          // Меняем активный класс и переключаем модель
+          currentActive.classList.remove('active');
+          nextItem.classList.add('active');
+          switchModel(nextItem.dataset.model);
+          
+          // Обновляем подсказку
+          arHint.textContent = 'Наведите камеру на маркер Hiro';
+          arHint.classList.remove('hidden');
+          
+          // Восстанавливаем возможность переключения после задержки
+          setTimeout(() => {
+            isModelSwitching = false;
+          }, 600);
+        }
+        
+        // Функция для перехода к предыдущей модели
+        function goToPrevModel() {
+          if (isModelSwitching) return; // Предотвращаем одновременные переключения
+          isModelSwitching = true;
+          
+          const currentActive = document.querySelector('.carousel-item.active');
+          let prevItem = currentActive.previousElementSibling;
+          
+          // Если нет предыдущего элемента, переходим к последнему (циклическая навигация)
+          if (!prevItem || !prevItem.classList.contains('carousel-item')) {
+            prevItem = document.querySelector('.carousel-item:last-child');
+          }
+          
+          // Анимируем кнопку
+          prevButton.classList.add('active');
+          setTimeout(() => {
+            prevButton.classList.remove('active');
+          }, 200);
+          
+          // Меняем активный класс и переключаем модель
+          currentActive.classList.remove('active');
+          prevItem.classList.add('active');
+          switchModel(prevItem.dataset.model);
+          
+          // Обновляем подсказку
+          arHint.textContent = 'Наведите камеру на маркер Hiro';
+          arHint.classList.remove('hidden');
+          
+          // Восстанавливаем возможность переключения после задержки
+          setTimeout(() => {
+            isModelSwitching = false;
+          }, 600);
         }
 
         // Инициализация
@@ -318,10 +681,20 @@
               });
           }
           
+          // Добавляем обработчики для кнопок навигации
+          prevButton.addEventListener('click', goToPrevModel);
+          nextButton.addEventListener('click', goToNextModel);
+          
           // Обработчик выбора модели
           carouselItems.forEach(item => {
             item.addEventListener('click', () => {
+              if (isModelSwitching || item.classList.contains('active')) return;
+              isModelSwitching = true;
+              
+              // Убираем активный класс со всех элементов
               carouselItems.forEach(i => i.classList.remove('active'));
+              
+              // Добавляем активный класс на выбранный элемент
               item.classList.add('active');
               
               // Меняем модель
@@ -330,6 +703,11 @@
               // Обновляем подсказку
               arHint.textContent = 'Наведите камеру на маркер Hiro';
               arHint.classList.remove('hidden');
+              
+              // Восстанавливаем возможность переключения
+              setTimeout(() => {
+                isModelSwitching = false;
+              }, 600);
             });
           });
           
@@ -340,6 +718,11 @@
             arHint.textContent = 'AR доступен только на мобильных устройствах';
           } else {
             loading.classList.add('hidden');
+            // Показываем подсказку о навигации стрелками
+            arHint.textContent = 'Используйте стрелки для переключения между котом и стулом';
+            setTimeout(() => {
+              arHint.textContent = 'Наведите камеру на маркер Hiro';
+            }, 3000);
           }
           
           // Устанавливаем активную модель по умолчанию
@@ -369,12 +752,62 @@
           hiroMarker.addEventListener('markerFound', () => {
             console.log('Маркер Hiro обнаружен!');
             arHint.classList.add('hidden');
+            
+            // Устанавливаем флаг обнаружения маркера
+            window.markerVisible = true;
+            
+            // Стабилизация модели при обнаружении маркера
+            if (currentModel) {
+              // Сбрасываем параметры анимации для более плавного появления
+              currentModel.setAttribute('animation__scale', 'property: scale; to: 1 1 1; dur: 300; easing: easeOutQuad');
+            }
+            
+            // Показываем краткую подсказку о навигации
+            setTimeout(() => {
+              arHint.textContent = 'Используйте стрелки < > для переключения моделей';
+              arHint.classList.remove('hidden');
+              setTimeout(() => {
+                arHint.classList.add('hidden');
+              }, 3000);
+            }, 1000);
           });
           
           hiroMarker.addEventListener('markerLost', () => {
             console.log('Маркер Hiro потерян');
+            
+            // Сбрасываем флаг обнаружения маркера
+            window.markerVisible = false;
+            
             arHint.textContent = 'Наведите камеру на маркер Hiro';
             arHint.classList.remove('hidden');
+          });
+          
+          // Добавляем обработку стабилизации на интервале
+          setInterval(() => {
+            if (window.markerVisible && currentModel) {
+              // Дополнительная стабилизация, если маркер видим, но модель дрожит
+              if (currentModel.hasAttribute('animation__stabilize')) {
+                return;
+              }
+              
+              // Сглаживаем непредвиденные движения
+              currentModel.setAttribute('animation__stabilize', 'property: rotation; from: 0 0 0; to: 0 0 0; dur: 100; easing: linear');
+              
+              setTimeout(() => {
+                if (currentModel) {
+                  currentModel.removeAttribute('animation__stabilize');
+                }
+              }, 150);
+            }
+          }, 1000);
+          
+          // Добавляем обработку с клавиатуры для навигации (для тестирования)
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowRight') {
+              goToNextModel();
+            } else if (event.key === 'ArrowLeft') {
+              goToPrevModel();
+            }
           });
           
         } catch (error) {
