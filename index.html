@@ -162,17 +162,24 @@
       renderer="logarithmicDepthBuffer: true; precision: medium;"
       vr-mode-ui="enabled: false"
     >
+      <!-- Компонент для вращения -->
+      <a-assets>
+        <a-mixin id="spin" animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"></a-mixin>
+      </a-assets>
+    
       <!-- Маркер Hiro -->
       <a-marker id="hiro-marker" type="pattern" preset="hiro">
-        <!-- 3D модель будет добавлена динамически -->
-        <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="2 2 2"></a-entity>
+        <!-- Контейнер для модели с вращением -->
+        <a-entity id="model-container" position="0 0 0" rotation="0 0 0" scale="1 1 1">
+          <!-- 3D модель будет добавлена динамически -->
+        </a-entity>
         
         <!-- AR кнопки -->
-        <a-entity position="0 0 0">
+        <a-entity position="0 0.1 0">
           <!-- Веб-сайт кнопка -->
           <a-plane 
             id="website-button" 
-            position="1 0 0" 
+            position="0.7 0 0" 
             rotation="-90 0 0" 
             width="0.5" 
             height="0.5" 
@@ -183,7 +190,7 @@
           <!-- Email кнопка -->
           <a-plane 
             id="email-button" 
-            position="-1 0 0" 
+            position="-0.7 0 0" 
             rotation="-90 0 0" 
             width="0.5" 
             height="0.5" 
@@ -195,7 +202,7 @@
       
       <!-- Камера с курсором для взаимодействия -->
       <a-entity camera>
-        <a-cursor></a-cursor>
+        <a-cursor raycaster="objects: .clickable"></a-cursor>
       </a-entity>
     </a-scene>
 
@@ -240,7 +247,7 @@
               window.open('https://www.alphawood.store', '_blank');
               console.log('Website button clicked');
             } else if (id === 'email-button') {
-              window.open('mailto:info@alphawood.store', '_blank');
+              window.location.href = 'mailto:info@alphawood.store';
               console.log('Email button clicked');
             }
           });
@@ -303,9 +310,9 @@
           // Создаем новую модель
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
-          currentModel.setAttribute('scale', '1 1 1'); // Используем масштаб контейнера
-          currentModel.setAttribute('rotation', '0 0 0'); // Модель будет ориентирована как задано в контейнере
-          currentModel.setAttribute('position', '0 0 0');
+          currentModel.setAttribute('scale', '1.5 1.5 1.5');
+          currentModel.setAttribute('position', '0 0.5 0');
+          currentModel.setAttribute('mixin', 'spin'); // Добавляем вращение
           
           // Добавляем модель в контейнер
           modelContainer.appendChild(currentModel);
