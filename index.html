@@ -13,6 +13,31 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     
+    <!-- Скрипт для отключения диалоговых окон AR.js -->
+    <script>
+      // Отключаем диалоговые окна AR.js
+      window.addEventListener('load', function() {
+        // Отключаем запрос разрешения на использование AR
+        if (window.ARjs && window.ARjs.Utils) {
+          window.ARjs.Utils.displayResolutionPrompt = function() {};
+        }
+        
+        // Переопределяем стандартный confirm
+        const originalConfirm = window.confirm;
+        window.confirm = function(message) {
+          console.log('Confirm dialog bypassed:', message);
+          return true; // Всегда возвращаем true, как будто пользователь нажал "OK"
+        };
+        
+        // Переопределяем стандартный prompt
+        const originalPrompt = window.prompt;
+        window.prompt = function(message, defaultValue) {
+          console.log('Prompt dialog bypassed:', message);
+          return defaultValue; // Возвращаем значение по умолчанию
+        };
+      });
+    </script>
+    
     <style>
       body {
         margin: 0;
@@ -127,7 +152,7 @@
     <!-- A-Frame сцена -->
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono;"
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; maxDetectionRate: 60; canvasWidth: 1000; canvasHeight: 1000; displayWidth: 1000; displayHeight: 1000;"
       renderer="logarithmicDepthBuffer: true; precision: medium;"
       vr-mode-ui="enabled: false"
     >
@@ -207,6 +232,14 @@
         const carouselItems = document.querySelectorAll('.carousel-item');
         const modelContainer = document.querySelector('#model-container');
         
+        // Отключаем диалоги AR.js
+        if (window.AR && window.AR.context) {
+          window.AR.context.onInitializationError = function(error) {
+            console.error('AR initialization error:', error);
+            hideLoading();
+          };
+        }
+        
         let currentModel = null;
         let loadingTimeout = null;
         const LOADING_TIMEOUT = 10000; // 10 секунд максимальное время отображения загрузки
@@ -272,6 +305,19 @@
 
         // Инициализация
         try {
+          // Предварительно принимаем все разрешения
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+              .then(stream => {
+                // Останавливаем поток после получения разрешения
+                stream.getTracks().forEach(track => track.stop());
+                console.log('Camera permission granted');
+              })
+              .catch(error => {
+                console.error('Error accessing camera:', error);
+              });
+          }
+          
           // Обработчик выбора модели
           carouselItems.forEach(item => {
             item.addEventListener('click', () => {
