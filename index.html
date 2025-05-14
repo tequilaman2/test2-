@@ -8,20 +8,14 @@
     <meta name="apple-touch-fullscreen" content="yes">
     <title>Просмотр 3D-моделей в AR</title>
     
-    <!-- AR.js и A-Frame библиотеки -->
+    <!-- A-Frame и AR.js библиотеки -->
     <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
     
     <!-- Скрипт для автоматического запроса разрешений и отключения диалогов AR.js -->
     <script>
       // Автоматически запрашиваем доступ к камере при загрузке страницы
       window.addEventListener('load', function() {
-        // Отключаем запрос разрешения на использование AR
-        if (window.ARjs && window.ARjs.Utils) {
-          window.ARjs.Utils.displayResolutionPrompt = function() {};
-        }
-        
         // Принудительно запрашиваем доступ к камере
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices.getUserMedia({ video: true, audio: false })
@@ -35,20 +29,6 @@
               alert('Для работы AR необходимо разрешить доступ к камере');
             });
         }
-        
-        // Переопределяем стандартный confirm
-        const originalConfirm = window.confirm;
-        window.confirm = function(message) {
-          console.log('Confirm dialog bypassed:', message);
-          return true; // Всегда возвращаем true, как будто пользователь нажал "OK"
-        };
-        
-        // Переопределяем стандартный prompt
-        const originalPrompt = window.prompt;
-        window.prompt = function(message, defaultValue) {
-          console.log('Prompt dialog bypassed:', message);
-          return defaultValue; // Возвращаем значение по умолчанию
-        };
       });
     </script>
     
@@ -56,11 +36,13 @@
       body {
         margin: 0;
         padding: 0;
-        background-color: #000;
-        color: white;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        height: 100vh;
         overflow: hidden;
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        user-select: none;
       }
 
       .nav-container {
@@ -187,35 +169,37 @@
     <div class="ar-hint" id="ar-hint">Наведите камеру на маркер Hiro</div>
     <div class="model-name" id="model-name">Кот</div>
 
-    <!-- A-Frame сцена -->
-    <a-scene
+    <!-- A-Frame сцена с оптимизированными параметрами -->
+    <a-scene 
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: true; detectionMode: mono; patternRatio: 0.65; trackingMethod: best; maxDetectionRate: 60; canvasWidth: 1000; canvasHeight: 1000; displayWidth: 1000; displayHeight: 1000;"
-      renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true; alpha: true; colorManagement: true;"
       vr-mode-ui="enabled: false"
+      renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true; alpha: true;"
+      arjs="sourceType: webcam; detectionMode: mono; patternRatio: 0.75; trackingMethod: best; debugUIEnabled: false;"
     >
-      <!-- Рефернсный образец маркера для наглядности -->
-      <a-entity position="0 0 0" scale="1 1 1">
-        <a-image id="hiro-reference" src="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" 
-                position="0 -0.5 -3" rotation="-90 0 0" width="1" height="1" visible="true"></a-image>
-        <a-text value="Используйте этот маркер" position="0 -0.5 -2" rotation="-90 0 0" width="2" color="white" align="center"></a-text>
-      </a-entity>
-    
-      <!-- Маркер Hiro с упрощенными параметрами для лучшего распознавания -->
-      <a-marker id="hiro-marker" type="pattern" preset="hiro" emitevents="true" cursor="rayOrigin: mouse">
+      <!-- Упрощенный маркер Hiro -->
+      <a-marker 
+        preset="hiro" 
+        raycaster="objects: .clickable" 
+        emitevents="true"
+        cursor="fuse: false; rayOrigin: mouse;"
+        smooth="true" 
+        smoothCount="5" 
+        smoothTolerance="0.01" 
+        smoothThreshold="2"
+      >
         <!-- 3D модель будет добавлена динамически -->
-        <a-entity id="model-container" position="0 0.5 0" rotation="-90 0 0" scale="1 1 1"></a-entity>
+        <a-entity id="model-container" position="0 0 0" rotation="-90 0 0" scale="2 2 2"></a-entity>
         
         <!-- Плоскость с анимацией для эффекта обнаружения маркера -->
         <a-plane 
           id="marker-effect"
-          position="0 -0.01 0" 
+          position="0 -0.1 0" 
           rotation="-90 0 0" 
-          width="1" 
-          height="1" 
+          width="1.2" 
+          height="1.2" 
           color="#007AFF" 
-          opacity="0.3"
-          visible="true">
+          opacity="0.2"
+          animation="property: scale; from: 1 1 1; to: 1.2 1.2 1.2; dir: alternate; dur: 1000; loop: true; easing: easeInOutSine">
         </a-plane>
         
         <!-- AR кнопки -->
@@ -244,10 +228,8 @@
         </a-entity>
       </a-marker>
       
-      <!-- Камера с курсором для взаимодействия -->
-      <a-entity camera look-controls="enabled: false;" position="0 0 0">
-        <a-cursor></a-cursor>
-      </a-entity>
+      <!-- Камера без управления взглядом для лучшей производительности -->
+      <a-entity camera></a-entity>
     </a-scene>
 
     <!-- Навигационные кнопки -->
@@ -261,47 +243,6 @@
     </div>
 
     <script>
-      // Функция для сглаживания движений и стабилизации трекинга
-      AFRAME.registerComponent('movement-smoother', {
-        schema: {
-          factor: {type: 'number', default: 0.2}
-        },
-        
-        init: function() {
-          this.lastPosition = new THREE.Vector3();
-          this.lastPosition.copy(this.el.object3D.position);
-          
-          this.lastRotation = new THREE.Euler();
-          this.lastRotation.copy(this.el.object3D.rotation);
-          
-          this.smoothedPosition = new THREE.Vector3();
-          this.smoothedPosition.copy(this.el.object3D.position);
-          
-          this.smoothedRotation = new THREE.Euler();
-          this.smoothedRotation.copy(this.el.object3D.rotation);
-        },
-        
-        tick: function() {
-          // Сглаживаем положение
-          this.smoothedPosition.x += (this.el.object3D.position.x - this.smoothedPosition.x) * this.data.factor;
-          this.smoothedPosition.y += (this.el.object3D.position.y - this.smoothedPosition.y) * this.data.factor;
-          this.smoothedPosition.z += (this.el.object3D.position.z - this.smoothedPosition.z) * this.data.factor;
-          
-          // Сглаживаем вращение
-          this.smoothedRotation.x += (this.el.object3D.rotation.x - this.smoothedRotation.x) * this.data.factor;
-          this.smoothedRotation.y += (this.el.object3D.rotation.y - this.smoothedRotation.y) * this.data.factor;
-          this.smoothedRotation.z += (this.el.object3D.rotation.z - this.smoothedRotation.z) * this.data.factor;
-          
-          // Применяем сглаженные значения
-          this.el.object3D.position.copy(this.smoothedPosition);
-          this.el.object3D.rotation.copy(this.smoothedRotation);
-          
-          // Сохраняем последнее положение и вращение
-          this.lastPosition.copy(this.el.object3D.position);
-          this.lastRotation.copy(this.el.object3D.rotation);
-        }
-      });
-      
       // Регистрируем компонент для обработки кликов
       AFRAME.registerComponent('clickable', {
         init: function() {
@@ -330,47 +271,13 @@
         const nextButton = document.querySelector('#next-button');
         let isModelSwitching = false; // Флаг для предотвращения одновременных переключений
         
-        // Добавляем отладочную информацию
-        arHint.innerHTML = 'Ожидание маркера Hiro... <br>Состояние: Инициализация';
-        
         // Массив моделей
         const models = [
-          { path: './models/cat.glb', name: 'Кот' },
-          { path: './models/model.glb', name: 'Стул' }
+          { path: 'models/cat.glb', name: 'Кот' },
+          { path: 'models/model.glb', name: 'Стул' }
         ];
         
         let currentModelIndex = 0;
-        
-        // Дополнительные настройки для плавной работы
-        let lastFrameTime = 0;
-        const FRAME_THROTTLE = 1000 / 30; // Ограничение до 30 FPS для стабильности
-        
-        // Функция для ограничения частоты кадров
-        function throttleRAF(callback) {
-          return function() {
-            const currentTime = performance.now();
-            if (currentTime - lastFrameTime >= FRAME_THROTTLE) {
-              lastFrameTime = currentTime;
-              callback();
-            }
-          };
-        }
-        
-        // Применяем ограничение частоты кадров для более стабильного отображения
-        if (typeof window.requestAnimationFrame !== 'undefined') {
-          const originalRAF = window.requestAnimationFrame;
-          window.requestAnimationFrame = function(callback) {
-            return originalRAF(throttleRAF(callback));
-          };
-        }
-        
-        // Отключаем диалоги AR.js
-        if (window.AR && window.AR.context) {
-          window.AR.context.onInitializationError = function(error) {
-            console.error('AR initialization error:', error);
-            hideLoading();
-          };
-        }
         
         let currentModel = null;
         let loadingTimeout = null;
@@ -418,29 +325,14 @@
           // Обновляем название модели
           modelName.textContent = modelData.name;
           
-          // Подробное логирование
-          console.log('Переключение на модель:', modelData.path);
-          arHint.innerHTML = `Загрузка модели ${modelData.name}... <br>Путь: ${modelData.path}`;
-          
           // Замедляем все анимации перед удалением для более плавного перехода
           if (currentModel && currentModel.parentNode) {
-            // Сначала замедляем анимацию
-            currentModel.setAttribute('animation__scale', 'property: scale; to: 0 0 0; dur: 350; easing: easeInQuad');
+            // Удаляем предыдущую модель сразу
+            currentModel.parentNode.removeChild(currentModel);
             
-            // Удаляем предыдущую модель после анимации
-            setTimeout(() => {
-              if (currentModel && currentModel.parentNode) {
-                currentModel.parentNode.removeChild(currentModel);
-              }
-              
-              // Сбрасываем все анимации перед созданием новой модели
-              modelContainer.removeAttribute('animation');
-              setTimeout(() => {
-                // Создаем новую модель
-                createNewModel(modelData.path);
-                window.currentlyLoading = false;
-              }, 50);
-            }, 400);
+            // Создаем новую модель
+            createNewModel(modelData.path);
+            window.currentlyLoading = false;
           } else {
             // Если нет текущей модели, просто создаем новую
             createNewModel(modelData.path);
@@ -450,54 +342,25 @@
         
         // Функция создания новой модели
         function createNewModel(modelPath) {
-          console.log('Создание модели:', modelPath);
-          
-          // Прямо проверяем существование файла
-          fetch(modelPath)
-            .then(response => {
-              if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-              }
-              console.log('Файл модели доступен:', modelPath);
-            })
-            .catch(error => {
-              console.error('Ошибка доступа к файлу модели:', error);
-              arHint.innerHTML = `Ошибка доступа к файлу модели: ${error.message}`;
-            });
-            
-          // Создаем новую модель с простыми параметрами
-          if (currentModel && currentModel.parentNode) {
-            currentModel.parentNode.removeChild(currentModel);
-          }
-          
+          // Создаем новую модель
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
-          currentModel.setAttribute('scale', '2 2 2');
+          currentModel.setAttribute('scale', '1 1 1'); // Нормальный масштаб
           currentModel.setAttribute('rotation', '0 0 0');
           currentModel.setAttribute('position', '0 0 0');
           
           // Добавляем модель в контейнер
           modelContainer.appendChild(currentModel);
           
-          // Добавляем резервный объект, чтобы проверить отображение на маркере
-          const backupBox = document.createElement('a-box');
-          backupBox.setAttribute('position', '0 0 0');
-          backupBox.setAttribute('color', 'red');
-          backupBox.setAttribute('scale', '0.5 0.5 0.5');
-          backupBox.setAttribute('visible', 'true');
-          modelContainer.appendChild(backupBox);
-          
           // Обработчик загрузки модели
           currentModel.addEventListener('model-loaded', () => {
-            console.log('Модель успешно загружена:', modelPath);
+            console.log('Модель загружена:', modelPath);
             hideLoading();
-            arHint.innerHTML = `Модель ${currentModelIndex === 0 ? 'Кот' : 'Стул'} загружена! <br>Используйте стрелки для переключения`;
           });
           
           // Обработчик ошибки загрузки
-          currentModel.addEventListener('model-error', (error) => {
-            console.error('Ошибка загрузки модели:', modelPath, error);
-            arHint.innerHTML = `Ошибка загрузки модели <br>${modelPath}<br>${error ? error.detail : 'Неизвестная ошибка'}`;
+          currentModel.addEventListener('model-error', () => {
+            console.error('Ошибка загрузки модели:', modelPath);
             loading.textContent = 'Ошибка загрузки модели';
             setTimeout(hideLoading, 3000);
           });
@@ -559,32 +422,6 @@
 
         // Инициализация
         try {
-          // Предварительная проверка путей к моделям
-          fetch('./models/cat.glb')
-            .then(response => {
-              if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-              }
-              console.log('Модель кота найдена:', response.status);
-              arHint.innerHTML = 'Модель кота доступна';
-            })
-            .catch(error => {
-              console.error('Ошибка доступа к модели кота:', error);
-              arHint.innerHTML = `Ошибка доступа к модели кота: ${error.message}`;
-            });
-            
-          fetch('./models/model.glb')
-            .then(response => {
-              if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-              }
-              console.log('Модель стула найдена:', response.status);
-            })
-            .catch(error => {
-              console.error('Ошибка доступа к модели стула:', error);
-              arHint.innerHTML = `Ошибка доступа к модели стула: ${error.message}`;
-            });
-          
           // Добавляем обработчики для кнопок навигации
           prevButton.addEventListener('click', goToPrevModel);
           nextButton.addEventListener('click', goToNextModel);
@@ -596,7 +433,6 @@
             arHint.textContent = 'AR доступен только на мобильных устройствах';
           } else {
             loading.classList.add('hidden');
-            // Показываем подсказку о навигации стрелками
             arHint.textContent = 'Наведите камеру на маркер Hiro';
           }
           
@@ -616,64 +452,18 @@
           });
           
           // Обработка маркера Hiro
-          const hiroMarker = document.querySelector('#hiro-marker');
+          const hiroMarker = document.querySelector('a-marker');
           
           hiroMarker.addEventListener('markerFound', () => {
             console.log('Маркер Hiro обнаружен!');
-            
-            // Устанавливаем флаг обнаружения маркера
-            window.markerVisible = true;
-            
-            // Показываем индикатор обнаружения
-            document.querySelector('#marker-effect').setAttribute('visible', 'true');
-            document.querySelector('#marker-effect').setAttribute('color', '#00FF00');
-            
-            // Обновляем подсказку
-            arHint.innerHTML = 'Маркер найден! <br>Отображается модель ' + (currentModelIndex === 0 ? 'Кот' : 'Стул');
-            
-            // Стабилизация модели при обнаружении маркера
-            if (currentModel) {
-              currentModel.setAttribute('visible', 'true');
-            }
-            
-            // Скрываем через 3 секунды
-            setTimeout(() => {
-              arHint.classList.add('hidden');
-            }, 3000);
+            arHint.classList.add('hidden');
           });
           
           hiroMarker.addEventListener('markerLost', () => {
             console.log('Маркер Hiro потерян');
-            
-            // Сбрасываем флаг обнаружения маркера
-            window.markerVisible = false;
-            
-            // Показываем индикатор потери маркера
-            document.querySelector('#marker-effect').setAttribute('visible', 'true');
-            document.querySelector('#marker-effect').setAttribute('color', '#FF0000');
-            
+            arHint.textContent = 'Наведите камеру на маркер Hiro';
             arHint.classList.remove('hidden');
-            arHint.innerHTML = 'Маркер потерян! <br>Наведите камеру на маркер Hiro';
           });
-          
-          // Добавляем обработку стабилизации на интервале
-          setInterval(() => {
-            if (window.markerVisible && currentModel) {
-              // Дополнительная стабилизация, если маркер видим, но модель дрожит
-              if (currentModel.hasAttribute('animation__stabilize')) {
-                return;
-              }
-              
-              // Сглаживаем непредвиденные движения
-              currentModel.setAttribute('animation__stabilize', 'property: rotation; from: 0 0 0; to: 0 0 0; dur: 100; easing: linear');
-              
-              setTimeout(() => {
-                if (currentModel) {
-                  currentModel.removeAttribute('animation__stabilize');
-                }
-              }, 150);
-            }
-          }, 1000);
           
           // Добавляем обработку с клавиатуры для навигации (для тестирования)
           document.addEventListener('keydown', (event) => {
