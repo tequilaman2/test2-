@@ -170,20 +170,21 @@
       <!-- Маркер Hiro -->
       <a-marker id="hiro-marker" type="pattern" preset="hiro">
         <!-- Контейнер для модели с вращением -->
-        <a-entity id="model-container" position="0 0 0" rotation="0 0 0" scale="1 1 1">
-          <!-- 3D модель будет добавлена динамически -->
+        <a-entity id="model-wrapper" position="0 0.5 0">
+          <a-entity id="model-container" rotation="0 0 0" scale="1 1 1"></a-entity>
         </a-entity>
         
         <!-- AR кнопки -->
-        <a-entity position="0 0.1 0">
+        <a-entity position="0 0 0">
           <!-- Веб-сайт кнопка -->
           <a-plane 
             id="website-button" 
             position="0.7 0 0" 
-            rotation="-90 0 0" 
+            rotation="0 0 0" 
             width="0.5" 
             height="0.5" 
             material="src: site.png; transparent: true;"
+            look-at="[camera]"
             class="clickable"
           ></a-plane>
           
@@ -191,10 +192,11 @@
           <a-plane 
             id="email-button" 
             position="-0.7 0 0" 
-            rotation="-90 0 0" 
+            rotation="0 0 0" 
             width="0.5" 
             height="0.5" 
             material="src: em.png; transparent: true;"
+            look-at="[camera]"
             class="clickable"
           ></a-plane>
         </a-entity>
@@ -311,7 +313,7 @@
           currentModel = document.createElement('a-entity');
           currentModel.setAttribute('gltf-model', modelPath);
           currentModel.setAttribute('scale', '1.5 1.5 1.5');
-          currentModel.setAttribute('position', '0 0.5 0');
+          currentModel.setAttribute('position', '0 0 0');
           currentModel.setAttribute('mixin', 'spin'); // Добавляем вращение
           
           // Добавляем модель в контейнер
