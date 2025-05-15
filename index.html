@@ -233,6 +233,7 @@
       <button class="model-control-btn" id="rotate-model-btn">🔄</button>
       <button class="model-control-btn" id="scale-up-btn">➕</button>
       <button class="model-control-btn" id="scale-down-btn">➖</button>
+      <button class="model-control-btn" id="remove-model-btn">🗑️</button>
     </div>
 
     <!-- A-Frame сцена -->
@@ -487,6 +488,7 @@
         const rotateModelBtn = document.querySelector('#rotate-model-btn');
         const scaleUpBtn = document.querySelector('#scale-up-btn');
         const scaleDownBtn = document.querySelector('#scale-down-btn');
+        const removeModelBtn = document.querySelector('#remove-model-btn');
         
         // Состояние приложения
         let currentModel = null;           // Текущая загруженная модель
@@ -634,29 +636,78 @@
         function placeModelAtQR() {
           if (!lastDetectedCode || !selectedModel) return;
           
+          // Создаем контейнер для модели и кнопок
+          const modelContainer = document.createElement('a-entity');
+          modelContainer.setAttribute('id', 'qr-container-' + Date.now());
+          
+          // Получаем параметры коррекции для выбранной модели
+          const correction = getModelCorrection(selectedModel.dataset.model);
+          
           // Создаем новый элемент для модели
           const newModelEntity = document.createElement('a-entity');
           
           // Устанавливаем атрибуты для модели
           newModelEntity.setAttribute('gltf-model', selectedModel.dataset.model);
-          newModelEntity.setAttribute('position', '0 0.5 0');
-          newModelEntity.setAttribute('rotation', '0 0 0');
-          newModelEntity.setAttribute('scale', '1 1 1');
+          newModelEntity.setAttribute('position', '0 0.75 0');
+          newModelEntity.setAttribute('rotation', correction.rotation);
+          newModelEntity.setAttribute('scale', correction.scale);
           newModelEntity.setAttribute('draggable', '');
           newModelEntity.setAttribute('rotatable', '');
           newModelEntity.setAttribute('class', 'placed-model draggable-model');
+          newModelEntity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear');
           
           // Генерируем уникальный ID для модели
           const modelId = 'placed-model-' + Date.now();
           newModelEntity.setAttribute('id', modelId);
           
           // Добавляем модель в контейнер
-          qrModelContainer.appendChild(newModelEntity);
+          modelContainer.appendChild(newModelEntity);
+          
+          // Создаем кнопки сайта и email, как на маркере Hiro
+          const buttonContainer = document.createElement('a-entity');
+          buttonContainer.setAttribute('position', '0 0 0');
+          
+          // Веб-сайт кнопка
+          const websiteButton = document.createElement('a-plane');
+          websiteButton.setAttribute('id', 'qr-website-button-' + Date.now());
+          websiteButton.setAttribute('position', '0.7 0 0');
+          websiteButton.setAttribute('rotation', '0 0 0');
+          websiteButton.setAttribute('width', '0.5');
+          websiteButton.setAttribute('height', '0.5');
+          websiteButton.setAttribute('material', 'src: site.png; transparent: true;');
+          websiteButton.setAttribute('look-at', '[camera]');
+          websiteButton.setAttribute('class', 'clickable');
+          websiteButton.addEventListener('click', function() {
+            window.open('https://www.alphawood.store', '_blank');
+          });
+          
+          // Email кнопка
+          const emailButton = document.createElement('a-plane');
+          emailButton.setAttribute('id', 'qr-email-button-' + Date.now());
+          emailButton.setAttribute('position', '-0.7 0 0');
+          emailButton.setAttribute('rotation', '0 0 0');
+          emailButton.setAttribute('width', '0.5');
+          emailButton.setAttribute('height', '0.5');
+          emailButton.setAttribute('material', 'src: em.png; transparent: true;');
+          emailButton.setAttribute('look-at', '[camera]');
+          emailButton.setAttribute('class', 'clickable');
+          emailButton.addEventListener('click', function() {
+            window.location.href = 'mailto:info@alphawood.store';
+          });
+          
+          // Добавляем кнопки в контейнер
+          buttonContainer.appendChild(websiteButton);
+          buttonContainer.appendChild(emailButton);
+          modelContainer.appendChild(buttonContainer);
+          
+          // Добавляем весь контейнер в qr-model-container
+          qrModelContainer.appendChild(modelContainer);
           
           // Добавляем модель в список размещенных
           placedModels.push({
             id: modelId,
             entity: newModelEntity,
+            container: modelContainer,
             qrData: lastDetectedCode.data
           });
           
@@ -676,9 +727,9 @@
         
         function scaleModelUp() {
           if (selectedModel) {
-            const placedModelId = placedModels[placedModels.length - 1]?.id;
-            if (placedModelId) {
-              const model = document.getElementById(placedModelId);
+            const lastModel = placedModels[placedModels.length - 1];
+            if (lastModel && lastModel.id) {
+              const model = document.getElementById(lastModel.id);
               if (model) {
                 const currentScale = model.getAttribute('scale');
                 const newScale = {
@@ -694,9 +745,9 @@
         
         function scaleModelDown() {
           if (selectedModel) {
-            const placedModelId = placedModels[placedModels.length - 1]?.id;
-            if (placedModelId) {
-              const model = document.getElementById(placedModelId);
+            const lastModel = placedModels[placedModels.length - 1];
+            if (lastModel && lastModel.id) {
+              const model = document.getElementById(lastModel.id);
               if (model) {
                 const currentScale = model.getAttribute('scale');
                 const newScale = {
@@ -797,6 +848,28 @@
           });
         }
 
+        // Функция для удаления последней размещенной модели
+        function removeLastPlacedModel() {
+          if (placedModels.length > 0) {
+            // Берем последнюю размещенную модель
+            const lastModel = placedModels.pop();
+            
+            // Удаляем весь контейнер модели
+            if (lastModel.container && lastModel.container.parentNode) {
+              lastModel.container.parentNode.removeChild(lastModel.container);
+            }
+            
+            // Если больше нет размещенных моделей, скрываем элементы управления
+            if (placedModels.length === 0) {
+              modelControls.style.display = 'none';
+            }
+            
+            // Обновляем подсказку
+            arHint.textContent = 'Модель удалена';
+            console.log('Модель удалена');
+          }
+        }
+
         // Инициализация
         try {
           // Предварительно принимаем все разрешения
@@ -828,21 +901,44 @@
               switchModel(item.dataset.model);
               
               // Обновляем подсказку
-              arHint.textContent = 'Наведите камеру на QR-код для размещения модели';
+              arHint.textContent = 'Наведите камеру на QR-код или маркер Hiro для размещения модели';
               arHint.classList.remove('hidden');
               
               // Если QR-код уже обнаружен, показываем элементы управления
               if (lastDetectedCode) {
                 modelControls.style.display = 'flex';
+                
+                // Выделяем кнопку размещения модели
+                placeModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+                
+                // Сбрасываем стиль через 2 секунды
+                setTimeout(() => {
+                  placeModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                }, 2000);
               }
             });
           });
           
           // Обработчики для кнопок управления моделями
-          placeModelBtn.addEventListener('click', placeModelAtQR);
+          placeModelBtn.addEventListener('click', function() {
+            placeModelAtQR();
+            // Анимация нажатия кнопки
+            this.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+            setTimeout(() => {
+              this.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            }, 500);
+          });
           rotateModelBtn.addEventListener('click', toggleRotationMode);
           scaleUpBtn.addEventListener('click', scaleModelUp);
           scaleDownBtn.addEventListener('click', scaleModelDown);
+          removeModelBtn.addEventListener('click', function() {
+            removeLastPlacedModel();
+            // Анимация нажатия кнопки
+            this.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+            setTimeout(() => {
+              this.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            }, 500);
+          });
           
           // Проверяем, является ли устройство мобильным
           const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
