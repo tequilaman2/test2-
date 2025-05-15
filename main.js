@@ -28,7 +28,11 @@ const elements = {
   placeButton: document.getElementById('place-btn'),
   rotateButton: document.getElementById('rotate-btn'),
   resetButton: document.getElementById('reset-btn'),
-  arModeIndicator: document.getElementById('ar-mode-indicator')
+  arModeIndicator: document.getElementById('ar-mode-indicator'),
+  errorScreen: document.getElementById('error'),
+  errorMessage: document.getElementById('error-message'),
+  reloadButton: document.getElementById('reload-btn'),
+  startCameraButton: document.getElementById('start-camera-btn')
 };
 
 // Состояние приложения
@@ -69,6 +73,7 @@ let video;
 async function initApp() {
   try {
     showMessage('Инициализация AR...');
+    console.log("Начинаем инициализацию AR приложения");
     
     // Инициализируем Three.js глобальные переменные
     THREE = window.THREE;
@@ -76,7 +81,15 @@ async function initApp() {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
     
+    // Сначала проверяем доступность камеры
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showMessage('Ошибка: Камера недоступна в вашем браузере');
+      console.error('MediaDevices API не поддерживается в этом браузере');
+      return;
+    }
+    
     try {
+      console.log("Проверяем targets.mind");
       // Пытаемся создать mind-ar контекст, если есть targets.mind
       mindarThree = new window.MINDAR.IMAGE.MindARThree({
         container: elements.arContainer,
@@ -85,80 +98,150 @@ async function initApp() {
         filterBeta: 0.001,
         missTolerance: 5,
         warmupTolerance: 5,
-        cameraSwitchDelay: 800
+        cameraSwitchDelay: 800,
+        uiLoading: "#loading-screen",
+        uiScanning: false,
+        uiError: "#error",
       });
       
       // Получаем renderer, scene и camera из mind-ar
       renderer = mindarThree.renderer;
       scene = mindarThree.scene;
       camera = mindarThree.camera;
+      
+      console.log("MindAR инициализирован успешно");
     } catch (error) {
       console.log('Не удалось инициализировать MindAR с targets.mind, создаем базовый AR контекст:', error);
       
-      // Создаем простой контекст с AR.js или простую сцену Three.js
-      // с доступом к камере для сканирования QR-кодов
+      // Создаем простой контекст с Three.js и доступом к камере для сканирования QR-кодов
       const width = window.innerWidth;
       const height = window.innerHeight;
       
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      // Создаем рендерер
+      console.log("Создаем THREE.js рендерер");
+      renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true, 
+        preserveDrawingBuffer: true
+      });
       renderer.setSize(width, height);
       renderer.setPixelRatio(window.devicePixelRatio);
-      elements.arContainer.appendChild(renderer.domElement);
       
+      // Очищаем контейнер перед добавлением нового содержимого
+      while (elements.arContainer.firstChild) {
+        elements.arContainer.removeChild(elements.arContainer.firstChild);
+      }
+      
+      elements.arContainer.appendChild(renderer.domElement);
+      console.log("Рендерер добавлен в DOM");
+      
+      // Создаем сцену
       scene = new THREE.Scene();
       
-      // Создаем камеру
+      // Создаем камеру для сцены
       camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
       camera.position.set(0, 0, 5);
       
-      // Запускаем видео с камеры вручную
+      // Создаем и настраиваем видеоэлемент
+      console.log("Настраиваем видеоэлемент");
       video = document.createElement('video');
       video.setAttribute('autoplay', '');
       video.setAttribute('muted', '');
       video.setAttribute('playsinline', '');
       
-      // Получаем доступ к камере
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-          .then(function(stream) {
-            video.srcObject = stream;
-            video.play();
-            
-            // Создаем видео текстуру для фона
-            videoTexture = new THREE.VideoTexture(video);
-            const videoMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
-            const videoGeometry = new THREE.PlaneGeometry(1, 1);
-            const videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
-            
-            // Устанавливаем размер видео на задний план
+      // Добавляем видео в DOM для отладки (скрытое)
+      video.style.position = 'absolute';
+      video.style.top = '0';
+      video.style.left = '0';
+      video.style.width = '100px';
+      video.style.height = '100px';
+      video.style.opacity = '0.1';
+      video.style.zIndex = '100';
+      document.body.appendChild(video);
+      
+      // Запрашиваем доступ к камере
+      console.log("Запрашиваем доступ к камере...");
+      try {
+        // Запрос доступа к камере с обработкой ошибок
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+        
+        console.log("Доступ к камере получен");
+        showMessage('Камера запущена');
+        
+        // Настраиваем видеопоток
+        video.srcObject = stream;
+        
+        // Убедимся, что видео начало воспроизводиться
+        await new Promise((resolve) => {
+          video.onloadedmetadata = () => {
+            console.log("Видео метаданные загружены");
+            video.play()
+              .then(() => {
+                console.log("Видео начало воспроизводиться");
+                resolve();
+              })
+              .catch(e => {
+                console.error("Ошибка воспроизведения видео:", e);
+                resolve();
+              });
+          };
+        });
+        
+        // Создаем текстуру из видео
+        console.log("Создаем текстуру из видео");
+        videoTexture = new THREE.VideoTexture(video);
+        videoTexture.minFilter = THREE.LinearFilter;
+        videoTexture.magFilter = THREE.LinearFilter;
+        videoTexture.format = THREE.RGBFormat;
+        
+        // Создаем материал и меш для видео
+        const videoMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
+        const videoGeometry = new THREE.PlaneGeometry(2, 2);
+        const videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
+        
+        // Устанавливаем размер видео
+        const adjustVideoSize = () => {
+          if (video.videoWidth && video.videoHeight) {
             const videoAspect = video.videoWidth / video.videoHeight;
-            const screenAspect = width / height;
+            const screenAspect = window.innerWidth / window.innerHeight;
             
             if (videoAspect > screenAspect) {
               videoMesh.scale.set(1, videoAspect / screenAspect, 1);
             } else {
               videoMesh.scale.set(screenAspect / videoAspect, 1, 1);
             }
-            
-            // Создаем отдельную сцену для видео
-            const videoScene = new THREE.Scene();
-            const videoCamera = new THREE.OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0, 10);
-            videoScene.add(videoMesh);
-            
-            // Обновляем функцию рендеринга
-            renderer.autoClear = false;
-            
-            const originalRenderFunc = renderer.render;
-            renderer.render = function() {
-              renderer.clear();
-              originalRenderFunc.call(renderer, videoScene, videoCamera);
-              originalRenderFunc.call(renderer, scene, camera);
-            };
-          })
-          .catch(function(error) {
-            console.error('Ошибка доступа к камере:', error);
-            showMessage('Ошибка доступа к камере: ' + error.message);
-          });
+          }
+        };
+        
+        video.addEventListener('loadedmetadata', adjustVideoSize);
+        adjustVideoSize();
+        
+        // Создаем отдельную сцену для видео
+        console.log("Создаем сцену для видео");
+        const videoScene = new THREE.Scene();
+        const videoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        videoScene.add(videoMesh);
+        
+        // Настраиваем рендеринг
+        renderer.autoClear = false;
+        
+        const originalRenderFunc = renderer.render;
+        renderer.render = function() {
+          renderer.clear();
+          originalRenderFunc.call(renderer, videoScene, videoCamera);
+          originalRenderFunc.call(renderer, scene, camera);
+        };
+        
+      } catch (error) {
+        console.error('Ошибка доступа к камере:', error);
+        showMessage('Ошибка доступа к камере: ' + error.message);
+        alert('Ошибка доступа к камере: ' + error.message);
       }
     }
     
@@ -221,10 +304,24 @@ async function initApp() {
     // Загружаем первую модель
     await loadModel('cat');
     
-    // Запускаем AR, если инициализирован mindarThree
+    // Запускаем AR
+    console.log("Запускаем AR...");
     if (mindarThree) {
-      await mindarThree.start();
-      video = mindarThree.video;
+      console.log("Запускаем MindAR");
+      try {
+        await mindarThree.start();
+        video = mindarThree.video;
+        console.log("MindAR успешно запущен");
+      } catch (error) {
+        console.error("Ошибка запуска MindAR:", error);
+        showMessage("Ошибка запуска AR: " + error.message);
+      }
+    } else if (video) {
+      console.log("MindAR не инициализирован, используем видео напрямую");
+      // Если мы уже настроили видео вручную, не нужно делать ничего дополнительного
+    } else {
+      console.error("Не удалось запустить AR - ни MindAR, ни видео не инициализированы");
+      showMessage("Ошибка: Камера недоступна");
     }
     
     // Настраиваем анимацию
@@ -916,6 +1013,46 @@ function resetPlacedModels() {
 
 // Настройка обработчиков событий
 function setupEventListeners() {
+  // Обработчик для кнопки перезагрузки
+  if (elements.reloadButton) {
+    elements.reloadButton.addEventListener('click', () => {
+      window.location.reload();
+    });
+  }
+  
+  // Обработчик для кнопки запуска камеры
+  if (elements.startCameraButton) {
+    elements.startCameraButton.addEventListener('click', async () => {
+      elements.startCameraButton.style.display = 'none';
+      
+      try {
+        if (mindarThree) {
+          await mindarThree.start();
+          video = mindarThree.video;
+        } else if (video && !video.srcObject) {
+          // Запрашиваем доступ к камере вручную
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' } 
+          });
+          video.srcObject = stream;
+          await video.play();
+        }
+        
+        hideLoading();
+        showMessage('Камера запущена');
+      } catch (error) {
+        console.error('Ошибка при запуске камеры:', error);
+        showMessage('Ошибка запуска камеры: ' + error.message);
+        
+        // Показываем сообщение об ошибке
+        if (elements.errorScreen && elements.errorMessage) {
+          elements.errorMessage.textContent = 'Ошибка запуска камеры: ' + error.message;
+          elements.errorScreen.style.display = 'block';
+        }
+      }
+    });
+  }
+  
   // Обработчики для карусели моделей
   elements.modelItems.forEach((item, index) => {
     item.addEventListener('click', () => {
@@ -1182,8 +1319,33 @@ function showMessage(message) {
 
 // Скрыть экран загрузки
 function hideLoading() {
+  // Проверяем работу камеры перед скрытием
+  if (!video || !video.srcObject) {
+    console.warn('Камера не запущена, показываем кнопку ручного запуска');
+    
+    // Показываем кнопку запуска камеры вручную
+    if (elements.startCameraButton) {
+      elements.startCameraButton.style.display = 'block';
+    }
+    return;
+  }
+  
   elements.loadingScreen.classList.add('hidden');
   state.isLoading = false;
+}
+
+// Показать ошибку
+function showError(message) {
+  if (elements.errorScreen && elements.errorMessage) {
+    elements.errorMessage.textContent = message;
+    elements.errorScreen.style.display = 'block';
+    
+    // Скрываем экран загрузки если он отображается
+    elements.loadingScreen.classList.add('hidden');
+  } else {
+    // Запасной вариант - предупреждение
+    alert(message);
+  }
 }
 
 // Остановка AR
@@ -1206,21 +1368,13 @@ window.addEventListener('beforeunload', () => {
 });
 
 // Инициализация приложения при загрузке страницы
-// Запускаем инициализацию сразу, без задержки
+// Запускаем инициализацию сразу
 window.addEventListener('load', () => {
-  // Запрашиваем разрешение на использование камеры немедленно
-  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-      .then(function(stream) {
-        // После получения доступа к камере запускаем приложение
-        setTimeout(initApp, 100);
-      })
-      .catch(function(error) {
-        console.error('Ошибка доступа к камере:', error);
-        // Всё равно пытаемся запустить приложение
-        initApp();
-      });
-  } else {
-    initApp();
-  }
+  console.log("Страница загружена, инициализируем приложение");
+  
+  // Сначала запускаем приложение, не дожидаясь разрешения на камеру
+  initApp();
+  
+  // Показываем сообщение о запуске камеры
+  showMessage('Запуск камеры...');
 }); 
