@@ -248,50 +248,151 @@ async function initApp() {
 function initQRScanner() {
   if (!video) return;
   
-  const qrCheck = setInterval(() => {
-    if (video && video.readyState === video.HAVE_ENOUGH_DATA && !state.qrCodeDetected) {
-      scanQRCode();
+  // Убедимся, что jsQR доступен
+  if (!window.jsQR) {
+    console.warn('Библиотека jsQR не найдена, загружаем динамически');
+    const script = document.createElement('script');
+    script.src = 'jsQR.js';
+    script.onload = () => {
+      console.log('jsQR загружен динамически');
+      // После загрузки библиотеки продолжаем инициализацию сканера
+      startQRScanning();
+    };
+    script.onerror = () => console.error('Не удалось загрузить jsQR динамически');
+    document.head.appendChild(script);
+  } else {
+    // Если библиотека уже доступна, начинаем сканирование
+    startQRScanning();
+  }
+}
+
+// Запуск постоянного сканирования QR-кодов
+function startQRScanning() {
+  // Сканируем QR-код каждый кадр в анимационном цикле, 
+  // отдельный интервал не нужен, так как scanQRCode вызывается в setupAnimation
+  
+  // Однако, добавим периодическую проверку на сброс состояния, 
+  // чтобы можно было обнаружить QR-код снова, если он исчез и появился
+  setInterval(() => {
+    if (state.qrCodeDetected) {
+      // Проверяем, все еще ли виден QR-код
+      checkIfQRStillVisible();
     }
-  }, 1000);
+  }, 2000);
 }
 
 // Сканирование QR-кода
 function scanQRCode() {
-  if (!video) return;
+  if (!video || !window.jsQR) return;
   
-  // Проверяем наличие jsQR
-  if (!window.jsQR) {
-    console.warn('Библиотека jsQR не найдена, QR-сканирование недоступно');
-    // Пытаемся загрузить jsQR динамически, если она не доступна
-    const script = document.createElement('script');
-    script.src = 'jsQR.js';
-    script.onload = () => console.log('jsQR загружен динамически');
-    script.onerror = () => console.error('Не удалось загрузить jsQR динамически');
-    document.head.appendChild(script);
-    return;
-  }
-  
-  const canvas = document.createElement('canvas');
-  const context = canvas.getContext('2d');
-  const width = video.videoWidth;
-  const height = video.videoHeight;
-  
-  canvas.width = width;
-  canvas.height = height;
-  context.drawImage(video, 0, 0, width, height);
-  
-  const imageData = context.getImageData(0, 0, width, height);
-  const code = jsQR(imageData.data, width, height);
-  
-  if (code) {
-    console.log('QR код обнаружен:', code.data);
-    showMessage('QR-код обнаружен: ' + code.data);
-    state.qrCodeDetected = true;
+  try {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const width = video.videoWidth;
+    const height = video.videoHeight;
     
-    // Автоматическое размещение модели при обнаружении QR-кода
-    setTimeout(() => {
-      placeModelInAR();
-    }, 500);
+    if (width === 0 || height === 0) return;
+    
+    canvas.width = width;
+    canvas.height = height;
+    context.drawImage(video, 0, 0, width, height);
+    
+    const imageData = context.getImageData(0, 0, width, height);
+    const code = jsQR(imageData.data, width, height);
+    
+    if (code) {
+      console.log('QR код обнаружен:', code.data);
+      showMessage('QR-код обнаружен');
+      
+      if (!state.qrCodeDetected) {
+        // Запоминаем положение QR-кода
+        state.lastQRCodePosition = {
+          x: code.location.topLeftCorner.x,
+          y: code.location.topLeftCorner.y,
+          width: Math.abs(code.location.topRightCorner.x - code.location.topLeftCorner.x),
+          height: Math.abs(code.location.bottomLeftCorner.y - code.location.topLeftCorner.y)
+        };
+        
+        // Устанавливаем флаг обнаружения QR-кода
+        state.qrCodeDetected = true;
+        
+        // Делаем модель видимой (это произойдет в setupAnimation)
+        
+        // Устанавливаем позицию контейнера модели в соответствии с QR-кодом
+        positionModelOnQRCode(code);
+      } else {
+        // Обновляем позицию контейнера модели, если QR-код перемещается
+        positionModelOnQRCode(code);
+      }
+      
+      // Сохраняем время последнего обнаружения QR-кода
+      state.lastQRDetectionTime = Date.now();
+    }
+  } catch (error) {
+    console.error('Ошибка при сканировании QR-кода:', error);
+  }
+}
+
+// Проверка, все еще ли виден QR-код
+function checkIfQRStillVisible() {
+  // Если прошло более 1 секунды с момента последнего обнаружения QR-кода,
+  // считаем, что QR-код больше не виден
+  const now = Date.now();
+  const timeSinceLastDetection = now - (state.lastQRDetectionTime || 0);
+  
+  if (timeSinceLastDetection > 1000) {
+    state.qrCodeDetected = false;
+    state.lastQRCodePosition = null;
+    showMessage('QR-код потерян. Наведите камеру на QR-код снова');
+  }
+}
+
+// Позиционирование модели на QR-коде
+function positionModelOnQRCode(code) {
+  if (!currentModel || !modelContainerGroup) return;
+  
+  try {
+    // Вычисляем центр QR-кода в пикселях видеопотока
+    const centerX = (code.location.topLeftCorner.x + code.location.bottomRightCorner.x) / 2;
+    const centerY = (code.location.topLeftCorner.y + code.location.bottomRightCorner.y) / 2;
+    
+    // Вычисляем размер QR-кода
+    const qrWidth = Math.abs(code.location.topRightCorner.x - code.location.topLeftCorner.x);
+    const qrHeight = Math.abs(code.location.bottomLeftCorner.y - code.location.topLeftCorner.y);
+    const qrSize = Math.max(qrWidth, qrHeight);
+    
+    // Если у нас есть автоматическое позиционирование через MindAR или ARjs,
+    // мы не трогаем позицию модели
+    if (mindarThree && qrAnchor) {
+      return;
+    }
+    
+    // Преобразуем координаты из пикселей видео в координаты 3D-сцены
+    // Для простоты используем фиксированное значение глубины
+    const modelScale = qrSize / Math.max(video.videoWidth, video.videoHeight) * 2;
+    
+    // Устанавливаем масштаб модели пропорционально размеру QR-кода
+    if (currentModel) {
+      const modelInfo = models[state.selectedModelId];
+      const baseScale = modelInfo.scale || 0.5;
+      currentModel.scale.set(
+        baseScale * modelScale,
+        baseScale * modelScale,
+        baseScale * modelScale
+      );
+    }
+    
+    // В режиме без MindAR, мы должны позиционировать модель вручную
+    if (!mindarThree) {
+      // Преобразуем координаты из пикселей в нормализованные координаты (-1 до 1)
+      const normX = (centerX / video.videoWidth) * 2 - 1;
+      const normY = -(centerY / video.videoHeight) * 2 + 1;
+      
+      // Устанавливаем позицию модели в сцене
+      modelContainerGroup.position.set(normX, normY, -1);
+    }
+  } catch (error) {
+    console.error('Ошибка при позиционировании модели на QR-коде:', error);
   }
 }
 
@@ -437,59 +538,89 @@ function addButtonsToModel(model) {
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   const height = size.y;
+  const width = size.x;
   
   // Создаем группу для кнопок
   const buttonsGroup = new THREE.Group();
   
-  // Создаем текстуры для кнопок
-  const wwwTexture = createTextTexture('WWW', 128, 128);
-  const emTexture = createTextTexture('EM', 128, 128);
+  // Загружаем текстуры для кнопок из файлов
+  const textureLoader = new THREE.TextureLoader();
   
-  // Создаем геометрию для кнопок
-  const buttonGeometry = new THREE.CircleGeometry(0.05, 32);
+  // Размер кнопок
+  const buttonSize = 0.08;
   
-  // Создаем материалы для кнопок
-  const wwwMaterial = new THREE.MeshBasicMaterial({ 
-    map: wwwTexture, 
-    transparent: true,
-    opacity: 0.9
-  });
-  
-  const emMaterial = new THREE.MeshBasicMaterial({ 
-    map: emTexture, 
-    transparent: true,
-    opacity: 0.9
-  });
-  
-  // Создаем кнопки
-  const wwwButton = new THREE.Mesh(buttonGeometry, wwwMaterial);
-  wwwButton.position.set(0.1, height * 0.8, 0);
-  wwwButton.userData = { type: 'button', action: 'www' };
-  
-  const emButton = new THREE.Mesh(buttonGeometry, emMaterial);
-  emButton.position.set(-0.1, height * 0.8, 0);
-  emButton.userData = { type: 'button', action: 'email' };
-  
-  // Добавляем кнопки в группу
-  buttonsGroup.add(wwwButton);
-  buttonsGroup.add(emButton);
-  
-  // Функция для обеспечения биллбординга (всегда смотрят на камеру)
-  const updateButtonOrientation = () => {
-    if (camera) {
-      const cameraPosition = new THREE.Vector3();
-      camera.getWorldPosition(cameraPosition);
-      
-      wwwButton.lookAt(cameraPosition);
-      emButton.lookAt(cameraPosition);
-    }
+  // Функция для создания кнопки с изображением
+  const createButtonWithImage = (imagePath, position, action) => {
+    return new Promise((resolve) => {
+      textureLoader.load(
+        imagePath,
+        (texture) => {
+          // Создаем геометрию для кнопки (прямоугольник с соотношением сторон как у текстуры)
+          const aspect = texture.image.width / texture.image.height;
+          const buttonGeometry = new THREE.PlaneGeometry(buttonSize * aspect, buttonSize);
+          
+          // Создаем материал с текстурой
+          const buttonMaterial = new THREE.MeshBasicMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 1.0
+          });
+          
+          // Создаем кнопку
+          const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+          button.position.copy(position);
+          button.userData = { type: 'button', action: action };
+          
+          // Добавляем кнопку в группу
+          buttonsGroup.add(button);
+          resolve(button);
+        },
+        undefined,
+        (error) => {
+          console.error('Ошибка загрузки текстуры:', error);
+          // Создаем запасной вариант кнопки с текстом
+          const fallbackTexture = createTextTexture(action === 'www' ? 'WWW' : 'EM', 128, 128);
+          const buttonGeometry = new THREE.CircleGeometry(buttonSize/2, 32);
+          const buttonMaterial = new THREE.MeshBasicMaterial({
+            map: fallbackTexture,
+            transparent: true,
+            opacity: 0.9
+          });
+          
+          const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+          button.position.copy(position);
+          button.userData = { type: 'button', action: action };
+          
+          buttonsGroup.add(button);
+          resolve(button);
+        }
+      );
+    });
   };
   
-  // Добавляем функцию обновления в userData
-  buttonsGroup.userData = { 
-    type: 'buttons',
-    update: updateButtonOrientation
-  };
+  // Создаем и добавляем кнопки
+  Promise.all([
+    createButtonWithImage('site.png', new THREE.Vector3(width * 0.4, height * 0.5, 0), 'www'),
+    createButtonWithImage('em.png', new THREE.Vector3(-width * 0.4, height * 0.5, 0), 'email')
+  ]).then(buttons => {
+    // Функция для обеспечения биллбординга (всегда смотрят на камеру)
+    const updateButtonOrientation = () => {
+      if (camera) {
+        const cameraPosition = new THREE.Vector3();
+        camera.getWorldPosition(cameraPosition);
+        
+        buttons.forEach(button => {
+          button.lookAt(cameraPosition);
+        });
+      }
+    };
+    
+    // Добавляем функцию обновления в userData
+    buttonsGroup.userData = { 
+      type: 'buttons',
+      update: updateButtonOrientation
+    };
+  });
   
   // Добавляем группу кнопок к модели
   model.add(buttonsGroup);
@@ -543,17 +674,34 @@ function setupAnimation() {
     // Обновляем ориентацию кнопок на моделях
     updateModelButtons();
     
-    // Вращаем текущую модель, если нужно
-    if (currentModel && currentModel.userData.autoRotate && !state.placingMode && !state.rotatingMode) {
-      const axis = currentModel.userData.rotationAxis || new THREE.Vector3(0, 1, 0);
-      const speed = currentModel.userData.rotationSpeed || 0.01;
+    // Модель должна быть видна только при обнаружении QR-кода или маркера
+    if (currentModel) {
+      // Проверяем, должна ли модель быть видимой
+      const shouldBeVisible = state.qrCodeDetected || state.targetFound;
       
-      currentModel.rotateOnAxis(axis, speed);
+      // Если модель в контейнере modelContainerGroup
+      if (modelContainerGroup.children.includes(currentModel)) {
+        // Показываем модель только если обнаружен QR-код или маркер
+        modelContainerGroup.visible = shouldBeVisible;
+        
+        // Вращаем текущую модель, если нужно
+        if (shouldBeVisible && currentModel.userData.autoRotate && !state.placingMode && !state.rotatingMode) {
+          const axis = currentModel.userData.rotationAxis || new THREE.Vector3(0, 1, 0);
+          const speed = currentModel.userData.rotationSpeed || 0.01;
+          
+          currentModel.rotateOnAxis(axis, speed);
+        }
+      }
     }
     
     // Обновляем индикатор размещения
     if (state.placingMode && placementIndicator) {
       updatePlacementIndicator();
+    }
+    
+    // Обновляем сканирование QR-кода
+    if (video && video.readyState === video.HAVE_ENOUGH_DATA && !state.qrCodeDetected) {
+      scanQRCode();
     }
     
     // Отрисовываем сцену
@@ -1058,4 +1206,21 @@ window.addEventListener('beforeunload', () => {
 });
 
 // Инициализация приложения при загрузке страницы
-window.addEventListener('load', initApp); 
+// Запускаем инициализацию сразу, без задержки
+window.addEventListener('load', () => {
+  // Запрашиваем разрешение на использование камеры немедленно
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+      .then(function(stream) {
+        // После получения доступа к камере запускаем приложение
+        setTimeout(initApp, 100);
+      })
+      .catch(function(error) {
+        console.error('Ошибка доступа к камере:', error);
+        // Всё равно пытаемся запустить приложение
+        initApp();
+      });
+  } else {
+    initApp();
+  }
+}); 
