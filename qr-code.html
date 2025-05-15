@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Тестовый QR-код</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .qr-container {
+            text-align: center;
+        }
+        .qr-code {
+            width: 300px;
+            height: 300px;
+            background-color: white;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-family: Arial, sans-serif;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="qr-container">
+        <h1>Сканируйте этот QR-код</h1>
+        <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://www.alphawood.store" alt="QR-код для тестирования AR">
+    </div>
+</body>
+</html> 

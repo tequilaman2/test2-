@@ -1,0 +1,315 @@
+/* Основные стили */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  color: #fff;
+}
+
+/* Экран загрузки */
+#loading-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  transition: opacity 0.5s ease-in-out;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  font-size: 18px;
+  color: #fff;
+}
+
+.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Сообщение AR */
+.ar-message {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 30px;
+  color: #fff;
+  font-size: 16px;
+  z-index: 10;
+  text-align: center;
+  max-width: 90%;
+  transition: opacity 0.3s ease;
+}
+
+/* Контейнер AR */
+#ar-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Индикатор режима AR */
+.ar-mode-indicator {
+  position: fixed;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background-color: rgba(66, 133, 244, 0.8);
+  border-radius: 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 10;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.ar-mode-indicator.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+  pointer-events: none;
+}
+
+/* Панель с моделями */
+.model-carousel {
+  position: fixed;
+  bottom: 30px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  padding: 10px 15px;
+  z-index: 20;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent 100%);
+}
+
+.model-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.model-item {
+  flex: 0 0 auto;
+  width: 80px;
+  height: 80px;
+  border-radius: 15px;
+  background-color: rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.model-item.active {
+  border-color: #4285f4;
+  transform: scale(1.1);
+}
+
+.model-thumbnail {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.model-thumbnail img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+/* Кнопки AR */
+.ar-controls {
+  position: fixed;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  z-index: 20;
+}
+
+.control-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-size: 24px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.control-btn:active {
+  transform: scale(0.95);
+}
+
+.btn-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.btn-text {
+  font-size: 10px;
+  margin-top: 2px;
+  opacity: 0.8;
+}
+
+/* Индикатор размещения */
+.placement-indicator {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px dashed #4285f4;
+  background-color: rgba(66, 133, 244, 0.2);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.placement-indicator.visible {
+  opacity: 1;
+}
+
+/* Кнопки на 3D-модели */
+.model-button {
+  width: 40px;
+  height: 40px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #000;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.model-button:active {
+  transform: scale(0.9);
+}
+
+/* Стили для состояния AR */
+.ar-active .model-carousel {
+  opacity: 0.7;
+  transform: translateY(20px);
+}
+
+.ar-active .ar-controls {
+  opacity: 0.7;
+}
+
+.ar-active.model-placing .model-carousel,
+.ar-active.model-placing .ar-controls {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* Стили для кнопок уровня модели */
+.model-level-buttons {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+}
+
+.model-level-button {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #fff;
+  border: none;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 14px;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  transition: all 0.2s ease;
+}
+
+.model-level-button:active {
+  transform: translate(-50%, -50%) scale(0.9);
+}
+
+/* Адаптивность */
+@media (max-width: 600px) {
+  .model-item {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .control-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
+  
+  .btn-text {
+    font-size: 9px;
+  }
+} 

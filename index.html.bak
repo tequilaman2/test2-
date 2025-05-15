@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <title>AR Viewer</title>
+    
+    <!-- AR.js и A-Frame библиотеки -->
+    <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+    <!-- Добавляем библиотеку для распознавания QR-кодов -->
+    <script src="jsQR.js"></script>
+    
+    <!-- Скрипт для отключения диалоговых окон AR.js -->
+    <script>
+      // Отключаем диалоговые окна AR.js
+      window.addEventListener('load', function() {
+        // Отключаем запрос разрешения на использование AR
+        if (window.ARjs && window.ARjs.Utils) {
+          window.ARjs.Utils.displayResolutionPrompt = function() {};
+        }
+        
+        // Переопределяем стандартный confirm
+        const originalConfirm = window.confirm;
+        window.confirm = function(message) {
+          console.log('Confirm dialog bypassed:', message);
+          return true; // Всегда возвращаем true, как будто пользователь нажал "OK"
+        };
+        
+        // Переопределяем стандартный prompt
+        const originalPrompt = window.prompt;
+        window.prompt = function(message, defaultValue) {
+          console.log('Prompt dialog bypassed:', message);
+          return defaultValue; // Возвращаем значение по умолчанию
+        };
+      });
+    </script>
+    
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #000;
+        color: white;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .carousel-container {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 95%;
+        max-width: 600px;
+        z-index: 1000;
+      }
+
+      .carousel {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: rgba(0, 0, 0, 0.7);
+        border-radius: 15px;
+        padding: 10px;
+        width: 100%;
+        max-width: 500px;
+        overflow: hidden;
+      }
+
+      .carousel-item {
+        flex: 0 0 auto;
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background: rgba(255, 255, 255, 0.1);
+        border: 2px solid transparent;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 15px;
+        position: relative;
+      }
+
+      .model-display {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .carousel-item:hover {
+        transform: scale(1.05);
+      }
+
+      .carousel-item.active {
+        border-color: #007AFF;
+      }
+
+      .loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-size: 18px;
+        z-index: 2000;
+      }
+
+      .loading.hidden {
+        display: none;
+      }
+
+      .ar-hint {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px 25px;
+        border-radius: 10px;
+        text-align: center;
+        z-index: 1000;
+        font-size: 16px;
+        transition: opacity 0.3s ease;
+      }
+
+      .ar-hint.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      /* Скрываем стандартный интерфейс AR.js */
+      .a-enter-vr {
+        display: none !important;
+      }
+      
+      /* Стили для работы с QR-кодами */
+      #qr-canvas {
+        display: none;
+      }
+      
+      #qr-video {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0;
+        pointer-events: none;
+        z-index: -1;
+      }
+      
+      .qr-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%; 
+        height: 100%;
+        z-index: 900;
+        pointer-events: none;
+      }
+      
+      .qr-finder {
+        position: absolute;
+        border: 2px solid #00ff00;
+        box-shadow: 0 0 0 2px rgba(0, 255, 0, 0.5);
+        pointer-events: none;
+        display: none;
+      }
+      
+      .model-controls {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .model-control-btn {
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        margin-bottom: 10px;
+        font-size: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      }
+      
+      .model-control-btn:active {
+        transform: translateY(2px);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      }
+      
+      .draggable-model {
+        cursor: move;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="loading" id="loading">Загрузка AR...</div>
+    <div class="ar-hint" id="ar-hint">Выберите модель внизу экрана</div>
+    
+    <!-- Элементы для работы с QR-кодами -->
+    <canvas id="qr-canvas"></canvas>
+    <video id="qr-video" playsinline></video>
+    <div class="qr-overlay">
+      <div id="qr-finder" class="qr-finder"></div>
+    </div>
+    
+    <!-- Элементы управления для перетаскивания моделей -->
+    <div class="model-controls" id="model-controls" style="display: none;">
+      <button class="model-control-btn" id="rotate-model-btn">🔄</button>
+      <button class="model-control-btn" id="scale-up-btn">➕</button>
+      <button class="model-control-btn" id="scale-down-btn">➖</button>
+      <button class="model-control-btn" id="remove-model-btn">🗑️</button>
+    </div>
+
+    <!-- A-Frame сцена -->
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.5; trackingMethod: best; maxDetectionRate: 60; cameraParametersUrl: camera_para.dat;"
+      renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true;"
+      vr-mode-ui="enabled: false"
+      id="scene"
+    >
+      <!-- Компонент для вращения -->
+      <a-assets>
+        <a-mixin id="spin" animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear"></a-mixin>
+        <img id="site-img" src="site.png" />
+        <img id="email-img" src="em.png" />
+      </a-assets>
+      
+      <!-- Контейнер для QR-кодов -->
+      <a-marker type="barcode" value="1" id="qr-marker-1"></a-marker>
+      <a-marker type="barcode" value="2" id="qr-marker-2"></a-marker>
+      <a-marker type="barcode" value="3" id="qr-marker-3"></a-marker>
+      <a-marker type="barcode" value="4" id="qr-marker-4"></a-marker>
+      
+      <!-- Контейнер для размещения моделей по QR-кодам -->
+      <a-entity id="qr-model-container"></a-entity>
+      
+      <!-- Камера с курсором для взаимодействия -->
+      <a-entity camera>
+        <a-cursor raycaster="objects: .clickable, .draggable-model"></a-cursor>
+      </a-entity>
+    </a-scene>
+
+    <!-- Карусель моделей -->
+    <div class="carousel-container">
+    <div class="carousel">
+        <div class="carousel-item active" data-model="models/cat.glb" data-usdz="models/cat.usdz">
+          <div class="model-display">
+            <a-entity 
+              id="preview-cat"
+              gltf-model="models/cat.glb" 
+              position="0 -0.2 -1.5" 
+              rotation="0 -45 0" 
+              scale="0.8 0.8 0.8"
+            ></a-entity>
+          </div>
+        </div>
+        <div class="carousel-item" data-model="models/model.glb" data-usdz="models/model.usdz">
+          <div class="model-display">
+            <a-entity 
+              id="preview-chair"
+              gltf-model="models/model.glb" 
+              position="0 -0.2 -1.5" 
+              rotation="0 -45 0" 
+              scale="0.8 0.8 0.8"
+            ></a-entity>
+      </div>
+      </div>
+      </div>
+    </div>
+
+    <script>
+      // Регистрируем компонент для обработки кликов
+      AFRAME.registerComponent('clickable', {
+        init: function() {
+          const el = this.el;
+          
+          el.addEventListener('click', function() {
+            const id = el.id;
+            
+            if (id === 'website-button') {
+              window.open('https://www.alphawood.store', '_blank');
+              console.log('Website button clicked');
+            } else if (id === 'email-button') {
+              window.location.href = 'mailto:info@alphawood.store';
+              console.log('Email button clicked');
+            }
+          });
+        }
+      });
+      
+      // Компонент для перетаскивания моделей
+      AFRAME.registerComponent('draggable', {
+        init: function() {
+          this.el.classList.add('draggable-model');
+          
+          // Состояния для перетаскивания
+          this.isDragging = false;
+          this.dragStartPosition = new THREE.Vector3();
+          this.dragStartMousePosition = new THREE.Vector2();
+          this.planeNormal = new THREE.Vector3(0, 0, 1);
+          this.plane = new THREE.Plane();
+          this.raycaster = new THREE.Raycaster();
+          this.mouse = new THREE.Vector2();
+          this.dragOffset = new THREE.Vector3();
+          
+          // Получаем камеру
+          this.camera = document.querySelector('a-entity[camera]').object3D;
+          
+          // Начало перетаскивания
+          this.el.addEventListener('mousedown', this.onDragStart.bind(this));
+          // Движение мыши при перетаскивании
+          document.addEventListener('mousemove', this.onDragMove.bind(this));
+          // Конец перетаскивания
+          document.addEventListener('mouseup', this.onDragEnd.bind(this));
+          
+          // Аналогичные слушатели для тачскрина
+          this.el.addEventListener('touchstart', this.onDragStart.bind(this));
+          document.addEventListener('touchmove', this.onDragMove.bind(this));
+          document.addEventListener('touchend', this.onDragEnd.bind(this));
+        },
+        
+        onDragStart: function(event) {
+          event.preventDefault();
+          
+          // Получаем текущую позицию модели
+          this.el.object3D.getWorldPosition(this.dragStartPosition);
+          
+          // Сохраняем начальную позицию мыши
+          const mouseEvent = event.type === 'touchstart' ? event.touches[0] : event;
+          this.dragStartMousePosition.x = (mouseEvent.clientX / window.innerWidth) * 2 - 1;
+          this.dragStartMousePosition.y = -(mouseEvent.clientY / window.innerHeight) * 2 + 1;
+          
+          // Обновляем плоскость перетаскивания
+          this.planeNormal.copy(this.camera.getWorldDirection(this.planeNormal).negate());
+          this.plane.setFromNormalAndCoplanarPoint(this.planeNormal, this.dragStartPosition);
+          
+          // Начинаем перетаскивание
+          this.isDragging = true;
+          
+          // Меняем стиль курсора
+          document.body.style.cursor = 'grabbing';
+        },
+        
+        onDragMove: function(event) {
+          if (!this.isDragging) return;
+          
+          // Получаем текущую позицию мыши
+          const mouseEvent = event.type === 'touchmove' ? event.touches[0] : event;
+          this.mouse.x = (mouseEvent.clientX / window.innerWidth) * 2 - 1;
+          this.mouse.y = -(mouseEvent.clientY / window.innerHeight) * 2 + 1;
+          
+          // Создаем рейкаст от камеры через положение мыши
+          this.raycaster.setFromCamera(this.mouse, this.camera);
+          
+          // Находим пересечение с плоскостью перетаскивания
+          const intersect = new THREE.Vector3();
+          if (this.raycaster.ray.intersectPlane(this.plane, intersect)) {
+            // Обновляем позицию модели
+            this.el.object3D.position.copy(intersect);
+          }
+        },
+        
+        onDragEnd: function(event) {
+          if (this.isDragging) {
+            this.isDragging = false;
+            document.body.style.cursor = 'auto';
+          }
+        }
+      });
+      
+      // Компонент для вращения модели
+      AFRAME.registerComponent('rotatable', {
+        init: function() {
+          this.isRotating = false;
+          this.lastMousePosition = new THREE.Vector2();
+          
+          this.el.addEventListener('mousedown', this.onRotateStart.bind(this));
+          document.addEventListener('mousemove', this.onRotateMove.bind(this));
+          document.addEventListener('mouseup', this.onRotateEnd.bind(this));
+          
+          this.el.addEventListener('touchstart', this.onRotateStart.bind(this));
+          document.addEventListener('touchmove', this.onRotateMove.bind(this));
+          document.addEventListener('touchend', this.onRotateEnd.bind(this));
+        },
+        
+        onRotateStart: function(event) {
+          event.preventDefault();
+          
+          // Только если нажата клавиша Shift (для десктопа) или включена кнопка поворота (для мобильных)
+          if (window.rotationMode || (event.shiftKey && event.type === 'mousedown')) {
+            this.isRotating = true;
+            
+            const mouseEvent = event.type === 'touchstart' ? event.touches[0] : event;
+            this.lastMousePosition.x = mouseEvent.clientX;
+            this.lastMousePosition.y = mouseEvent.clientY;
+            
+            document.body.style.cursor = 'move';
+          }
+        },
+        
+        onRotateMove: function(event) {
+          if (!this.isRotating) return;
+          
+          const mouseEvent = event.type === 'touchmove' ? event.touches[0] : event;
+          const deltaX = mouseEvent.clientX - this.lastMousePosition.x;
+          
+          // Поворачиваем модель на основе движения мыши
+          const currentRotation = this.el.object3D.rotation;
+          this.el.object3D.rotation.y += deltaX * 0.01;
+          
+          this.lastMousePosition.x = mouseEvent.clientX;
+          this.lastMousePosition.y = mouseEvent.clientY;
+        },
+        
+        onRotateEnd: function(event) {
+          if (this.isRotating) {
+            this.isRotating = false;
+            document.body.style.cursor = 'auto';
+          }
+        }
+      });
+      
+      document.addEventListener('DOMContentLoaded', async function() {
+        const loading = document.querySelector('#loading');
+        const arHint = document.querySelector('#ar-hint');
+        const carouselItems = document.querySelectorAll('.carousel-item');
+        const qrModelContainer = document.querySelector('#qr-model-container');
+        const video = document.querySelector('#qr-video');
+        const canvas = document.querySelector('#qr-canvas');
+        const qrFinder = document.querySelector('#qr-finder');
+        const scene = document.querySelector('#scene');
+        const modelControls = document.querySelector('#model-controls');
+        const rotateModelBtn = document.querySelector('#rotate-model-btn');
+        const scaleUpBtn = document.querySelector('#scale-up-btn');
+        const scaleDownBtn = document.querySelector('#scale-down-btn');
+        const removeModelBtn = document.querySelector('#remove-model-btn');
+        
+        // Получаем все маркеры
+        const qrMarkers = [
+          document.querySelector('#qr-marker-1'),
+          document.querySelector('#qr-marker-2'),
+          document.querySelector('#qr-marker-3'),
+          document.querySelector('#qr-marker-4')
+        ];
+        
+        // Состояние приложения
+        let currentModel = null;           // Текущая загруженная модель
+        let loadingTimeout = null;         // Таймаут для загрузки
+        let qrScanning = false;            // Включено ли сканирование QR
+        let qrDetectionTimer = null;       // Таймер для сканирования QR
+        let placedModels = [];             // Размещенные модели по QR
+        let selectedModel = null;          // Выбранная для размещения модель
+        let lastDetectedCode = null;       // Последний обнаруженный QR-код
+        let lastMarkerFound = null;        // Последний найденный маркер
+        window.rotationMode = false;       // Режим вращения модели
+        
+        const LOADING_TIMEOUT = 10000;     // 10 секунд максимальное время отображения загрузки
+        
+        // Инициализация видео для сканирования QR-кодов
+        async function initQRScanner() {
+          try {
+            // Запрашиваем доступ к камере
+            const stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: 'environment' },
+              audio: false
+            });
+            
+            // Настраиваем видео элемент
+            video.srcObject = stream;
+            video.setAttribute('playsinline', true);
+            await video.play();
+            
+            // Запускаем сканирование QR-кодов
+            qrScanning = true;
+            startQRDetection();
+            
+            console.log('QR сканер инициализирован');
+          } catch (error) {
+            console.error('Ошибка при инициализации сканера QR-кодов:', error);
+            arHint.textContent = 'Не удалось получить доступ к камере';
+          }
+        }
+        
+        // Сканирование кадра для QR-кодов
+        function scanQRCode() {
+          if (!qrScanning) return;
+          
+          // Получаем контекст canvas
+          const context = canvas.getContext('2d');
+          const width = video.videoWidth;
+          const height = video.videoHeight;
+          
+          // Устанавливаем размеры canvas по размерам видео
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+          
+          // Отрисовываем кадр из видео на canvas
+          context.drawImage(video, 0, 0, width, height);
+          
+          // Получаем данные изображения
+          const imageData = context.getImageData(0, 0, width, height);
+          
+          // Анализируем изображение на наличие QR-кода
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert',
+          });
+          
+          // Если QR-код найден
+          if (code) {
+            console.log('QR код обнаружен:', code.data);
+            
+            // Отображаем рамку вокруг QR-кода
+            displayQRFinder(code.location);
+            
+            // Проверяем, не тот же ли это QR-код
+            if (!lastDetectedCode || lastDetectedCode.data !== code.data) {
+              lastDetectedCode = code;
+              
+              // Обновляем подсказку
+              arHint.textContent = 'QR код обнаружен: ' + code.data;
+              arHint.classList.remove('hidden');
+              
+              // Если у нас есть выбранная модель для размещения
+              if (selectedModel) {
+                // Показываем элементы управления
+                modelControls.style.display = 'flex';
+                
+                // Выделяем кнопку плейсмента, чтобы пользователь понял что можно нажать
+                rotateModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+                setTimeout(() => {
+                  rotateModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                }, 2000);
+              }
+            }
+          } else {
+            // Скрываем рамку, если QR-код не найден
+            qrFinder.style.display = 'none';
+            
+            // Сбрасываем последний обнаруженный QR-код
+            if (lastDetectedCode) {
+              lastDetectedCode = null;
+              // Скрываем элементы управления, если нет активного QR-кода и нет размещенных моделей
+              if (placedModels.length === 0) {
+                modelControls.style.display = 'none';
+              }
+            }
+          }
+          
+          // Продолжаем сканирование
+          qrDetectionTimer = setTimeout(scanQRCode, 100);
+        }
+        
+        // Отображаем рамку вокруг QR-кода
+        function displayQRFinder(location) {
+          if (!location) {
+            qrFinder.style.display = 'none';
+            return;
+          }
+          
+          // Вычисляем координаты и размеры QR-кода на экране
+          const scale = window.innerWidth / video.videoWidth;
+          const left = Math.min(location.topLeftCorner.x, location.bottomLeftCorner.x) * scale;
+          const top = Math.min(location.topLeftCorner.y, location.topRightCorner.y) * scale;
+          const width = Math.max(
+            Math.abs(location.topRightCorner.x - location.topLeftCorner.x),
+            Math.abs(location.bottomRightCorner.x - location.bottomLeftCorner.x)
+          ) * scale;
+          const height = Math.max(
+            Math.abs(location.bottomLeftCorner.y - location.topLeftCorner.y),
+            Math.abs(location.bottomRightCorner.y - location.topRightCorner.y)
+          ) * scale;
+          
+          // Обновляем положение рамки
+          qrFinder.style.display = 'block';
+          qrFinder.style.left = left + 'px';
+          qrFinder.style.top = top + 'px';
+          qrFinder.style.width = width + 'px';
+          qrFinder.style.height = height + 'px';
+        }
+        
+        // Запуск сканирования QR-кодов
+        function startQRDetection() {
+          if (qrScanning && !qrDetectionTimer) {
+            scanQRCode();
+          }
+        }
+        
+        // Останавливаем сканирование QR-кодов
+        function stopQRDetection() {
+          qrScanning = false;
+          if (qrDetectionTimer) {
+            clearTimeout(qrDetectionTimer);
+            qrDetectionTimer = null;
+          }
+        }
+        
+        // Коррекция ориентации моделей в зависимости от их типа
+        function getModelCorrection(modelPath) {
+          if (modelPath.includes('cat.glb')) {
+            return {
+              rotation: "0 0 0",
+              position: "0 0.05 0",
+              scale: "0.5 0.5 0.5"
+            };
+          } else if (modelPath.includes('model.glb')) {
+            return {
+              rotation: "0 0 0",
+              position: "0 0.05 0",
+              scale: "0.3 0.3 0.3"  // Уменьшаем размер стула в 10 раз (с 3 до 0.3)
+            };
+          }
+          
+          // Значения по умолчанию
+          return {
+            rotation: "0 0 0",
+            position: "0 0.05 0",
+            scale: "0.5 0.5 0.5"
+          };
+        }
+
+        // Инициализация маркеров
+        qrMarkers.forEach((marker, index) => {
+          if (marker) {
+            // При нахождении маркера
+            marker.addEventListener('markerFound', function() {
+              console.log(`Маркер QR ${index + 1} найден`);
+              arHint.textContent = `QR-код ${index + 1} обнаружен`;
+              arHint.classList.remove('hidden');
+              
+              // Сохраняем последний найденный маркер
+              lastMarkerFound = marker;
+              
+              // Автоматически размещаем модель при обнаружении QR-кода
+              if (selectedModel && !marker.hasChildNodes()) {
+                // Автоматически размещаем модель на маркере
+                placeModelAtQR();
+              }
+              
+              // Показываем элементы управления для масштабирования и удаления
+              if (selectedModel) {
+                modelControls.style.display = 'flex';
+              }
+            });
+            
+            // При потере маркера
+            marker.addEventListener('markerLost', function() {
+              console.log(`Маркер QR ${index + 1} потерян`);
+              
+              // Сбрасываем последний найденный маркер
+              if (lastMarkerFound === marker) {
+                lastMarkerFound = null;
+              }
+            });
+          }
+        });
+
+        // Размещаем модель на текущем QR-маркере
+        function placeModelAtQR() {
+          if (!lastMarkerFound || !selectedModel) {
+            console.error('Не найден QR-маркер или не выбрана модель');
+            arHint.textContent = 'Наведите камеру на QR-код';
+            return;
+          }
+          
+          console.log('Размещение модели на QR-маркере:', selectedModel.dataset.model);
+          
+          // Получаем параметры коррекции для выбранной модели
+          const correction = getModelCorrection(selectedModel.dataset.model);
+          
+          // Создаем новый элемент для модели
+          const newModelEntity = document.createElement('a-entity');
+          
+          // Устанавливаем атрибуты для модели
+          newModelEntity.setAttribute('gltf-model', selectedModel.dataset.model);
+          newModelEntity.setAttribute('position', correction.position);
+          newModelEntity.setAttribute('rotation', correction.rotation);
+          newModelEntity.setAttribute('scale', correction.scale);
+          newModelEntity.setAttribute('class', 'placed-model');
+          newModelEntity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear');
+          
+          // Генерируем уникальный ID для модели
+          const modelId = 'placed-model-' + Date.now();
+          newModelEntity.setAttribute('id', modelId);
+          
+          console.log('Создана модель с ID:', modelId);
+          
+          // Создаем кнопки сайта и email
+          const buttonContainer = document.createElement('a-entity');
+          buttonContainer.setAttribute('position', '0 0 0');
+          
+          // Веб-сайт кнопка
+          const websiteButton = document.createElement('a-plane');
+          websiteButton.setAttribute('id', 'qr-website-button-' + Date.now());
+          websiteButton.setAttribute('position', '0.2 0 0');
+          websiteButton.setAttribute('rotation', '0 0 0');
+          websiteButton.setAttribute('width', '0.15');
+          websiteButton.setAttribute('height', '0.15');
+          websiteButton.setAttribute('material', 'src: #site-img; transparent: true;');
+          websiteButton.setAttribute('look-at', '[camera]');
+          websiteButton.setAttribute('class', 'clickable');
+          
+          // Добавляем обработчик для кнопки сайта
+          websiteButton.addEventListener('click', function() {
+            window.open('https://www.alphawood.store', '_blank');
+            console.log('QR сайт кнопка нажата');
+          });
+          
+          // Email кнопка
+          const emailButton = document.createElement('a-plane');
+          emailButton.setAttribute('id', 'qr-email-button-' + Date.now());
+          emailButton.setAttribute('position', '-0.2 0 0');
+          emailButton.setAttribute('rotation', '0 0 0');
+          emailButton.setAttribute('width', '0.15');
+          emailButton.setAttribute('height', '0.15');
+          emailButton.setAttribute('material', 'src: #email-img; transparent: true;');
+          emailButton.setAttribute('look-at', '[camera]');
+          emailButton.setAttribute('class', 'clickable');
+          
+          // Добавляем обработчик для кнопки email
+          emailButton.addEventListener('click', function() {
+            window.location.href = 'mailto:info@alphawood.store';
+            console.log('QR email кнопка нажата');
+          });
+          
+          // Очищаем предыдущие модели с маркера
+          while (lastMarkerFound.firstChild) {
+            lastMarkerFound.removeChild(lastMarkerFound.firstChild);
+          }
+          
+          // Добавляем кнопки в контейнер
+          buttonContainer.appendChild(websiteButton);
+          buttonContainer.appendChild(emailButton);
+          
+          // Создаем контейнер для модели и кнопок
+          const modelContainer = document.createElement('a-entity');
+          modelContainer.setAttribute('position', '0 0 0');
+          modelContainer.appendChild(newModelEntity);
+          modelContainer.appendChild(buttonContainer);
+          
+          // Добавляем контейнер в маркер
+          lastMarkerFound.appendChild(modelContainer);
+          
+          // Добавляем модель в список размещенных
+          placedModels.push({
+            id: modelId,
+            entity: newModelEntity,
+            container: modelContainer,
+            marker: lastMarkerFound
+          });
+          
+          // Обновляем подсказку
+          arHint.textContent = 'Модель размещена на QR-коде';
+          console.log('Модель размещена на QR-маркере');
+          
+          // Показываем элементы управления
+          modelControls.style.display = 'flex';
+        }
+        
+        // Функции управления моделью
+        function toggleRotationMode() {
+          window.rotationMode = !window.rotationMode;
+          rotateModelBtn.style.backgroundColor = window.rotationMode ? 'rgba(0, 127, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)';
+        }
+        
+        function scaleModelUp() {
+          if (selectedModel && placedModels.length > 0) {
+            const lastModel = placedModels[placedModels.length - 1];
+            if (lastModel && lastModel.id) {
+              const model = document.getElementById(lastModel.id);
+              if (model) {
+                const currentScale = model.getAttribute('scale');
+                const newScale = {
+                  x: currentScale.x * 1.2,
+                  y: currentScale.y * 1.2,
+                  z: currentScale.z * 1.2
+                };
+                model.setAttribute('scale', newScale);
+                console.log('Масштаб увеличен:', newScale);
+              }
+            }
+          }
+        }
+        
+        function scaleModelDown() {
+          if (selectedModel && placedModels.length > 0) {
+            const lastModel = placedModels[placedModels.length - 1];
+            if (lastModel && lastModel.id) {
+              const model = document.getElementById(lastModel.id);
+              if (model) {
+                const currentScale = model.getAttribute('scale');
+                const newScale = {
+                  x: currentScale.x * 0.8,
+                  y: currentScale.y * 0.8,
+                  z: currentScale.z * 0.8
+                };
+                model.setAttribute('scale', newScale);
+                console.log('Масштаб уменьшен:', newScale);
+              }
+            }
+          }
+        }
+
+        // Функция для управления загрузчиком
+        function showLoading(message = 'Загрузка AR...') {
+          // Очищаем предыдущий таймаут, если он есть
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+          }
+          
+          // Показываем загрузчик с указанным сообщением
+          loading.textContent = message;
+          loading.classList.remove('hidden');
+          
+          // Устанавливаем таймаут для автоматического скрытия загрузчика
+          loadingTimeout = setTimeout(() => {
+            console.warn('Таймаут загрузки, скрываем индикатор');
+            loading.classList.add('hidden');
+          }, LOADING_TIMEOUT);
+        }
+
+        function hideLoading() {
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+            loadingTimeout = null;
+          }
+          loading.classList.add('hidden');
+        }
+
+        // Функция для смены модели
+        function switchModel(modelPath) {
+          showLoading('Загрузка модели...');
+          console.log('Загрузка модели:', modelPath);
+          
+          // Получаем параметры коррекции для выбранной модели
+          const correction = getModelCorrection(modelPath);
+          
+          // Сохраняем информацию о текущей модели
+          currentModel = {
+            path: modelPath,
+            correction: correction
+          };
+          
+          // Скрываем загрузчик
+          hideLoading();
+          console.log('Модель выбрана:', modelPath);
+          
+          return currentModel;
+        }
+
+        // Функция для удаления последней размещенной модели
+        function removeLastPlacedModel() {
+          if (placedModels.length > 0) {
+            // Берем последнюю размещенную модель
+            const lastModel = placedModels.pop();
+            
+            // Удаляем модель с маркера
+            if (lastModel.marker) {
+              while (lastModel.marker.firstChild) {
+                lastModel.marker.removeChild(lastModel.marker.firstChild);
+              }
+              console.log('Удалена модель с маркера');
+            }
+            
+            // Если больше нет размещенных моделей, скрываем элементы управления
+            if (placedModels.length === 0) {
+              modelControls.style.display = 'none';
+            }
+            
+            // Обновляем подсказку
+            arHint.textContent = 'Модель удалена';
+            console.log('Модель удалена');
+          }
+        }
+
+        // Инициализация
+        try {
+          console.log('Начало инициализации AR приложения');
+          
+          // Предварительно принимаем все разрешения
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+              .then(stream => {
+                // Останавливаем поток после получения разрешения
+                stream.getTracks().forEach(track => track.stop());
+                console.log('Camera permission granted');
+                
+                // Инициализируем сканер QR-кодов
+                initQRScanner();
+              })
+              .catch(error => {
+                console.error('Error accessing camera:', error);
+              });
+          }
+          
+          // Обработчик выбора модели
+          carouselItems.forEach(item => {
+            item.addEventListener('click', () => {
+              carouselItems.forEach(i => i.classList.remove('active'));
+              item.classList.add('active');
+              
+              // Сохраняем выбранную модель для размещения
+              selectedModel = item;
+              
+              // Меняем модель
+              switchModel(item.dataset.model);
+              
+              // Если уже есть обнаруженный QR-код, размещаем модель автоматически
+              if (lastMarkerFound) {
+                // Размещаем модель на QR-коде
+                placeModelAtQR();
+                
+                // Показываем элементы управления
+                modelControls.style.display = 'flex';
+              } else {
+              // Обновляем подсказку
+                arHint.textContent = 'Наведите камеру на QR-код для размещения модели';
+              arHint.classList.remove('hidden');
+              }
+            });
+          });
+          
+          // Обработчики для кнопок управления моделями
+          rotateModelBtn.addEventListener('click', toggleRotationMode);
+          scaleUpBtn.addEventListener('click', scaleModelUp);
+          scaleDownBtn.addEventListener('click', scaleModelDown);
+          removeModelBtn.addEventListener('click', function() {
+            removeLastPlacedModel();
+            // Анимация нажатия кнопки
+            this.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+            setTimeout(() => {
+              this.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            }, 500);
+          });
+          
+          // Проверяем, является ли устройство мобильным
+          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          if (!isMobile) {
+            loading.textContent = 'AR доступен только на мобильных устройствах';
+            arHint.textContent = 'AR доступен только на мобильных устройствах';
+          } else {
+            loading.classList.add('hidden');
+          }
+          
+          // Устанавливаем активную модель по умолчанию
+          if (carouselItems.length > 0) {
+            const firstItem = carouselItems[0];
+            selectedModel = firstItem;
+            switchModel(firstItem.dataset.model);
+          }
+          
+          // Обработка ошибок соединения
+          window.addEventListener('online', () => {
+            console.log('Соединение восстановлено');
+            // Перезагружаем текущую модель
+            const activeItem = document.querySelector('.carousel-item.active');
+            if (activeItem) {
+              switchModel(activeItem.dataset.model);
+            }
+          });
+          
+          window.addEventListener('offline', () => {
+            console.warn('Соединение потеряно');
+            arHint.textContent = 'Отсутствует подключение к интернету';
+          });
+          
+          // Добавляем функционал свайпа между моделями
+          let startX = 0;
+          document.addEventListener('touchstart', (e) => {
+            startX = e.touches[0].clientX;
+          });
+          
+          document.addEventListener('touchend', (e) => {
+            const endX = e.changedTouches[0].clientX;
+            const diff = startX - endX;
+            
+            // Если пользователь сделал достаточно большой свайп
+            if (Math.abs(diff) > 50) {
+              const currentActive = document.querySelector('.carousel-item.active');
+              let nextItem;
+              
+              if (diff > 0) {
+                // Свайп влево - следующая модель
+                nextItem = currentActive.nextElementSibling;
+                if (!nextItem || !nextItem.classList.contains('carousel-item')) {
+                  nextItem = document.querySelector('.carousel-item:first-child');
+                }
+              } else {
+                // Свайп вправо - предыдущая модель
+                nextItem = currentActive.previousElementSibling;
+                if (!nextItem || !nextItem.classList.contains('carousel-item')) {
+                  nextItem = document.querySelector('.carousel-item:last-child');
+                }
+              }
+              
+              // Меняем активную модель
+              carouselItems.forEach(i => i.classList.remove('active'));
+              nextItem.classList.add('active');
+              selectedModel = nextItem;
+              switchModel(nextItem.dataset.model);
+            }
+          });
+          
+        } catch (error) {
+          console.error('Ошибка инициализации:', error);
+          arHint.textContent = 'Ошибка инициализации: ' + error.message;
+          hideLoading();
+        }
+      });
+    </script>
+  </body>
+</html>
