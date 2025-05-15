@@ -236,7 +236,6 @@
     
     <!-- Элементы управления для перетаскивания моделей -->
     <div class="model-controls" id="model-controls" style="display: none;">
-      <button class="model-control-btn" id="place-model-btn">📍</button>
       <button class="model-control-btn" id="rotate-model-btn">🔄</button>
       <button class="model-control-btn" id="scale-up-btn">➕</button>
       <button class="model-control-btn" id="scale-down-btn">➖</button>
@@ -463,7 +462,6 @@
         const qrFinder = document.querySelector('#qr-finder');
         const scene = document.querySelector('#scene');
         const modelControls = document.querySelector('#model-controls');
-        const placeModelBtn = document.querySelector('#place-model-btn');
         const rotateModelBtn = document.querySelector('#rotate-model-btn');
         const scaleUpBtn = document.querySelector('#scale-up-btn');
         const scaleDownBtn = document.querySelector('#scale-down-btn');
@@ -562,9 +560,9 @@
                 modelControls.style.display = 'flex';
                 
                 // Выделяем кнопку плейсмента, чтобы пользователь понял что можно нажать
-                placeModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+                rotateModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
                 setTimeout(() => {
-                  placeModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                  rotateModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
                 }, 2000);
               }
             }
@@ -666,15 +664,15 @@
               // Сохраняем последний найденный маркер
               lastMarkerFound = marker;
               
-              // Показываем элементы управления, если выбрана модель
+              // Автоматически размещаем модель при обнаружении QR-кода
+              if (selectedModel && !marker.hasChildNodes()) {
+                // Автоматически размещаем модель на маркере
+                placeModelAtQR();
+              }
+              
+              // Показываем элементы управления для масштабирования и удаления
               if (selectedModel) {
                 modelControls.style.display = 'flex';
-                
-                // Выделяем кнопку размещения
-                placeModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
-                setTimeout(() => {
-                  placeModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                }, 2000);
               }
             });
             
@@ -940,34 +938,22 @@
               // Меняем модель
               switchModel(item.dataset.model);
               
-              // Обновляем подсказку
-              arHint.textContent = 'Наведите камеру на QR-код для размещения модели';
-              arHint.classList.remove('hidden');
-              
-              // Если QR-код уже обнаружен, показываем элементы управления
-              if (lastDetectedCode) {
+              // Если уже есть обнаруженный QR-код, размещаем модель автоматически
+              if (lastMarkerFound) {
+                // Размещаем модель на QR-коде
+                placeModelAtQR();
+                
+                // Показываем элементы управления
                 modelControls.style.display = 'flex';
-                
-                // Выделяем кнопку размещения модели
-                placeModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
-                
-                // Сбрасываем стиль через 2 секунды
-                setTimeout(() => {
-                  placeModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-                }, 2000);
+              } else {
+                // Обновляем подсказку
+                arHint.textContent = 'Наведите камеру на QR-код для размещения модели';
+                arHint.classList.remove('hidden');
               }
             });
           });
           
           // Обработчики для кнопок управления моделями
-          placeModelBtn.addEventListener('click', function() {
-            placeModelAtQR();
-            // Анимация нажатия кнопки
-            this.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
-            setTimeout(() => {
-              this.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-            }, 500);
-          });
           rotateModelBtn.addEventListener('click', toggleRotationMode);
           scaleUpBtn.addEventListener('click', scaleModelUp);
           scaleDownBtn.addEventListener('click', scaleModelDown);
