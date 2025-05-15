@@ -209,6 +209,13 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      }
+      
+      .model-control-btn:active {
+        transform: translateY(2px);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
       }
       
       .draggable-model {
@@ -239,7 +246,7 @@
     <!-- A-Frame сцена -->
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best; maxDetectionRate: 60;"
+      arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.5; trackingMethod: best; maxDetectionRate: 60; cameraParametersUrl: camera_para.dat;"
       renderer="logarithmicDepthBuffer: true; precision: medium; antialias: true;"
       vr-mode-ui="enabled: false"
       id="scene"
@@ -250,6 +257,12 @@
         <img id="site-img" src="site.png" />
         <img id="email-img" src="em.png" />
       </a-assets>
+      
+      <!-- Контейнер для QR-кодов -->
+      <a-marker type="barcode" value="1" id="qr-marker-1"></a-marker>
+      <a-marker type="barcode" value="2" id="qr-marker-2"></a-marker>
+      <a-marker type="barcode" value="3" id="qr-marker-3"></a-marker>
+      <a-marker type="barcode" value="4" id="qr-marker-4"></a-marker>
       
       <!-- Контейнер для размещения моделей по QR-кодам -->
       <a-entity id="qr-model-container"></a-entity>
@@ -456,6 +469,14 @@
         const scaleDownBtn = document.querySelector('#scale-down-btn');
         const removeModelBtn = document.querySelector('#remove-model-btn');
         
+        // Получаем все маркеры
+        const qrMarkers = [
+          document.querySelector('#qr-marker-1'),
+          document.querySelector('#qr-marker-2'),
+          document.querySelector('#qr-marker-3'),
+          document.querySelector('#qr-marker-4')
+        ];
+        
         // Состояние приложения
         let currentModel = null;           // Текущая загруженная модель
         let loadingTimeout = null;         // Таймаут для загрузки
@@ -464,6 +485,7 @@
         let placedModels = [];             // Размещенные модели по QR
         let selectedModel = null;          // Выбранная для размещения модель
         let lastDetectedCode = null;       // Последний обнаруженный QR-код
+        let lastMarkerFound = null;        // Последний найденный маркер
         window.rotationMode = false;       // Режим вращения модели
         
         const LOADING_TIMEOUT = 10000;     // 10 секунд максимальное время отображения загрузки
@@ -613,46 +635,70 @@
           if (modelPath.includes('cat.glb')) {
             return {
               rotation: "0 0 0",
-              position: "0 0.3 0",
-              scale: "1.5 1.5 1.5"
+              position: "0 0.05 0",
+              scale: "0.5 0.5 0.5"
             };
           } else if (modelPath.includes('model.glb')) {
             return {
               rotation: "0 0 0",
-              position: "0 0.2 0",
-              scale: "3 3 3"  // Увеличенный размер стула
+              position: "0 0.05 0",
+              scale: "0.3 0.3 0.3"  // Уменьшаем размер стула в 10 раз (с 3 до 0.3)
             };
           }
           
           // Значения по умолчанию
           return {
             rotation: "0 0 0",
-            position: "0 0.25 0",
-            scale: "1.5 1.5 1.5"
+            position: "0 0.05 0",
+            scale: "0.5 0.5 0.5"
           };
         }
 
-        // Размещаем модель по координатам QR-кода
+        // Инициализация маркеров
+        qrMarkers.forEach((marker, index) => {
+          if (marker) {
+            // При нахождении маркера
+            marker.addEventListener('markerFound', function() {
+              console.log(`Маркер QR ${index + 1} найден`);
+              arHint.textContent = `QR-код ${index + 1} обнаружен`;
+              arHint.classList.remove('hidden');
+              
+              // Сохраняем последний найденный маркер
+              lastMarkerFound = marker;
+              
+              // Показываем элементы управления, если выбрана модель
+              if (selectedModel) {
+                modelControls.style.display = 'flex';
+                
+                // Выделяем кнопку размещения
+                placeModelBtn.style.backgroundColor = 'rgba(0, 255, 0, 0.7)';
+                setTimeout(() => {
+                  placeModelBtn.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+                }, 2000);
+              }
+            });
+            
+            // При потере маркера
+            marker.addEventListener('markerLost', function() {
+              console.log(`Маркер QR ${index + 1} потерян`);
+              
+              // Сбрасываем последний найденный маркер
+              if (lastMarkerFound === marker) {
+                lastMarkerFound = null;
+              }
+            });
+          }
+        });
+
+        // Размещаем модель на текущем QR-маркере
         function placeModelAtQR() {
-          if (!lastDetectedCode || !selectedModel) {
-            console.error('Нет данных QR-кода или не выбрана модель');
+          if (!lastMarkerFound || !selectedModel) {
+            console.error('Не найден QR-маркер или не выбрана модель');
+            arHint.textContent = 'Наведите камеру на QR-код';
             return;
           }
           
-          console.log('Размещение модели по QR:', selectedModel.dataset.model);
-          
-          // Создаем якорь (anchor) для привязки модели к QR-коду
-          const anchor = document.createElement('a-entity');
-          const anchorId = 'qr-anchor-' + Date.now();
-          anchor.setAttribute('id', anchorId);
-          anchor.setAttribute('position', '0 0 -0.5');
-          
-          // Создаем контейнер для модели и кнопок
-          const modelContainer = document.createElement('a-entity');
-          const containerId = 'qr-container-' + Date.now();
-          modelContainer.setAttribute('id', containerId);
-          modelContainer.setAttribute('position', '0 0 0');
-          modelContainer.setAttribute('visible', 'true');
+          console.log('Размещение модели на QR-маркере:', selectedModel.dataset.model);
           
           // Получаем параметры коррекции для выбранной модели
           const correction = getModelCorrection(selectedModel.dataset.model);
@@ -665,11 +711,8 @@
           newModelEntity.setAttribute('position', correction.position);
           newModelEntity.setAttribute('rotation', correction.rotation);
           newModelEntity.setAttribute('scale', correction.scale);
-          newModelEntity.setAttribute('draggable', '');
-          newModelEntity.setAttribute('rotatable', '');
-          newModelEntity.setAttribute('class', 'placed-model draggable-model');
+          newModelEntity.setAttribute('class', 'placed-model');
           newModelEntity.setAttribute('animation', 'property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear');
-          newModelEntity.setAttribute('visible', 'true');
           
           // Генерируем уникальный ID для модели
           const modelId = 'placed-model-' + Date.now();
@@ -677,27 +720,22 @@
           
           console.log('Создана модель с ID:', modelId);
           
-          // Добавляем модель в контейнер
-          modelContainer.appendChild(newModelEntity);
-          
           // Создаем кнопки сайта и email
           const buttonContainer = document.createElement('a-entity');
           buttonContainer.setAttribute('position', '0 0 0');
-          buttonContainer.setAttribute('visible', 'true');
           
           // Веб-сайт кнопка
           const websiteButton = document.createElement('a-plane');
           websiteButton.setAttribute('id', 'qr-website-button-' + Date.now());
-          websiteButton.setAttribute('position', '0.7 0 0');
+          websiteButton.setAttribute('position', '0.2 0 0');
           websiteButton.setAttribute('rotation', '0 0 0');
-          websiteButton.setAttribute('width', '0.5');
-          websiteButton.setAttribute('height', '0.5');
+          websiteButton.setAttribute('width', '0.15');
+          websiteButton.setAttribute('height', '0.15');
           websiteButton.setAttribute('material', 'src: #site-img; transparent: true;');
           websiteButton.setAttribute('look-at', '[camera]');
           websiteButton.setAttribute('class', 'clickable');
-          websiteButton.setAttribute('visible', 'true');
           
-          // Добавляем обработчик клика непосредственно через addEventListener
+          // Добавляем обработчик для кнопки сайта
           websiteButton.addEventListener('click', function() {
             window.open('https://www.alphawood.store', '_blank');
             console.log('QR сайт кнопка нажата');
@@ -706,53 +744,49 @@
           // Email кнопка
           const emailButton = document.createElement('a-plane');
           emailButton.setAttribute('id', 'qr-email-button-' + Date.now());
-          emailButton.setAttribute('position', '-0.7 0 0');
+          emailButton.setAttribute('position', '-0.2 0 0');
           emailButton.setAttribute('rotation', '0 0 0');
-          emailButton.setAttribute('width', '0.5');
-          emailButton.setAttribute('height', '0.5');
+          emailButton.setAttribute('width', '0.15');
+          emailButton.setAttribute('height', '0.15');
           emailButton.setAttribute('material', 'src: #email-img; transparent: true;');
           emailButton.setAttribute('look-at', '[camera]');
           emailButton.setAttribute('class', 'clickable');
-          emailButton.setAttribute('visible', 'true');
           
-          // Добавляем обработчик клика непосредственно через addEventListener
+          // Добавляем обработчик для кнопки email
           emailButton.addEventListener('click', function() {
             window.location.href = 'mailto:info@alphawood.store';
             console.log('QR email кнопка нажата');
           });
           
+          // Очищаем предыдущие модели с маркера
+          while (lastMarkerFound.firstChild) {
+            lastMarkerFound.removeChild(lastMarkerFound.firstChild);
+          }
+          
           // Добавляем кнопки в контейнер
           buttonContainer.appendChild(websiteButton);
           buttonContainer.appendChild(emailButton);
+          
+          // Создаем контейнер для модели и кнопок
+          const modelContainer = document.createElement('a-entity');
+          modelContainer.setAttribute('position', '0 0 0');
+          modelContainer.appendChild(newModelEntity);
           modelContainer.appendChild(buttonContainer);
           
-          // Добавляем контейнер модели к якорю
-          anchor.appendChild(modelContainer);
-          
-          // Добавляем якорь в контейнер QR-моделей
-          qrModelContainer.appendChild(anchor);
+          // Добавляем контейнер в маркер
+          lastMarkerFound.appendChild(modelContainer);
           
           // Добавляем модель в список размещенных
           placedModels.push({
             id: modelId,
-            containerId: containerId,
             entity: newModelEntity,
-            anchor: anchor,
-            qrData: lastDetectedCode.data
+            container: modelContainer,
+            marker: lastMarkerFound
           });
           
           // Обновляем подсказку
-          arHint.textContent = 'Модель размещена! Можно перетаскивать';
-          console.log('Модель размещена по QR коду:', lastDetectedCode.data);
-          
-          // Добавляем обработчики события для отслеживания загрузки модели
-          newModelEntity.addEventListener('model-loaded', function() {
-            console.log('Модель успешно загружена:', selectedModel.dataset.model);
-          });
-          
-          newModelEntity.addEventListener('model-error', function(e) {
-            console.error('Ошибка загрузки модели:', e);
-          });
+          arHint.textContent = 'Модель размещена на QR-коде';
+          console.log('Модель размещена на QR-маркере');
           
           // Показываем элементы управления
           modelControls.style.display = 'flex';
@@ -855,10 +889,12 @@
             // Берем последнюю размещенную модель
             const lastModel = placedModels.pop();
             
-            // Удаляем весь якорь модели
-            if (lastModel.anchor && lastModel.anchor.parentNode) {
-              lastModel.anchor.parentNode.removeChild(lastModel.anchor);
-              console.log('Удален элемент:', lastModel.id);
+            // Удаляем модель с маркера
+            if (lastModel.marker) {
+              while (lastModel.marker.firstChild) {
+                lastModel.marker.removeChild(lastModel.marker.firstChild);
+              }
+              console.log('Удалена модель с маркера');
             }
             
             // Если больше нет размещенных моделей, скрываем элементы управления
