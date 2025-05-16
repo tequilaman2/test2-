@@ -12,7 +12,8 @@ body {
   position: fixed;
   width: 100%;
   height: 100%;
-  background-color: #000;
+  /* Убираем черный фон, чтобы был виден видеопоток с камеры */
+  /* background-color: #000; */
   color: #fff;
 }
 

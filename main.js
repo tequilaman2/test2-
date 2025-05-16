@@ -48,7 +48,8 @@ const state = {
   longPressThreshold: 700, // миллисекунды
   modelLoaded: false,
   qrCodeDetected: false,
-  targetFound: false
+  targetFound: false,
+  hasMindARTarget: false // Флаг наличия MindAR маркера
 };
 
 // Объекты Three.js
@@ -81,37 +82,72 @@ async function initApp() {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
     
+    // Проверяем наличие файла targets.mind через fetch перед инициализацией MindAR
+    let hasMindARTarget = false;
+    try {
+      const response = await fetch('targets.mind', { method: 'HEAD' });
+      hasMindARTarget = response.ok;
+      state.hasMindARTarget = hasMindARTarget;
+      console.log(`Файл targets.mind ${hasMindARTarget ? 'найден' : 'не найден'}`);
+    } catch (error) {
+      console.log('Ошибка при проверке targets.mind:', error);
+    }
+    
     // Сначала проверяем доступность камеры
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showMessage('Ошибка: Камера недоступна в вашем браузере');
       console.error('MediaDevices API не поддерживается в этом браузере');
+      showError('Ваш браузер не поддерживает доступ к камере');
       return;
     }
     
     try {
-      console.log("Проверяем targets.mind");
-      // Пытаемся создать mind-ar контекст, если есть targets.mind
-      mindarThree = new window.MINDAR.IMAGE.MindARThree({
-        container: elements.arContainer,
-        imageTargetSrc: 'targets.mind',
-        filterMinCF: 0.0001,
-        filterBeta: 0.001,
-        missTolerance: 5,
-        warmupTolerance: 5,
-        cameraSwitchDelay: 800,
-        uiLoading: "#loading-screen",
-        uiScanning: false,
-        uiError: "#error",
-      });
-      
-      // Получаем renderer, scene и camera из mind-ar
-      renderer = mindarThree.renderer;
-      scene = mindarThree.scene;
-      camera = mindarThree.camera;
-      
-      console.log("MindAR инициализирован успешно");
+      if (hasMindARTarget) {
+        console.log("Инициализация MindAR с targets.mind...");
+        // Пытаемся создать mind-ar контекст, если есть targets.mind
+        mindarThree = new window.MINDAR.IMAGE.MindARThree({
+          container: elements.arContainer,
+          imageTargetSrc: 'targets.mind',
+          filterMinCF: 0.0001,
+          filterBeta: 0.001,
+          missTolerance: 5,
+          warmupTolerance: 5,
+          cameraSwitchDelay: 800,
+          uiLoading: "#loading-screen",
+          uiScanning: false,
+          uiError: "#error",
+        });
+        
+        // Получаем renderer, scene и camera из mind-ar
+        renderer = mindarThree.renderer;
+        scene = mindarThree.scene;
+        camera = mindarThree.camera;
+        
+        // Создаем контейнер для моделей
+        const targets = mindarThree.addImageTargets('targets.mind');
+        modelAnchor = targets.addAnchor(0);
+        modelAnchor.onTargetFound = () => {
+          console.log("MindAR маркер найден");
+          state.targetFound = true;
+          showMessage('Маркер обнаружен!');
+        };
+        
+        modelAnchor.onTargetLost = () => {
+          console.log("MindAR маркер потерян");
+          state.targetFound = false;
+          showMessage('Маркер потерян. Наведите камеру на изображение');
+        };
+        
+        // Создаем контейнер для моделей
+        modelContainerGroup = new THREE.Group();
+        modelAnchor.group.add(modelContainerGroup);
+        
+        console.log("MindAR инициализирован успешно");
+            } else {
+        console.log('MindAR targets.mind не найден, создаем базовый AR контекст');
+      }
     } catch (error) {
-      console.log('Не удалось инициализировать MindAR с targets.mind, создаем базовый AR контекст:', error);
+      console.log('Ошибка при инициализации MindAR:', error);
       
       // Создаем простой контекст с Three.js и доступом к камере для сканирования QR-кодов
       const width = window.innerWidth;
@@ -138,9 +174,10 @@ async function initApp() {
       // Создаем сцену
       scene = new THREE.Scene();
       
-      // Создаем камеру для сцены
+      // Создаем камеру для сцены с правильным расположением
       camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-      camera.position.set(0, 0, 5);
+      camera.position.set(0, 0, 1); // Ближе к центру сцены
+      camera.lookAt(0, 0, 0); // Камера смотрит на центр сцены
       
       // Создаем и настраиваем видеоэлемент
       console.log("Настраиваем видеоэлемент");
@@ -149,102 +186,48 @@ async function initApp() {
       video.setAttribute('muted', '');
       video.setAttribute('playsinline', '');
       
-      // Добавляем видео в DOM для отладки (скрытое)
+      // Делаем видео видимым для отладки
       video.style.position = 'absolute';
       video.style.top = '0';
       video.style.left = '0';
-      video.style.width = '100px';
-      video.style.height = '100px';
-      video.style.opacity = '0.1';
+      video.style.width = '10vw';  // 10% ширины экрана
+      video.style.height = 'auto';
+      video.style.opacity = '0.2';
       video.style.zIndex = '100';
       document.body.appendChild(video);
       
-      // Запрашиваем доступ к камере
-      console.log("Запрашиваем доступ к камере...");
-      try {
-        // Запрос доступа к камере с обработкой ошибок
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-        
-        console.log("Доступ к камере получен");
-        showMessage('Камера запущена');
-        
-        // Настраиваем видеопоток
-        video.srcObject = stream;
-        
-        // Убедимся, что видео начало воспроизводиться
-        await new Promise((resolve) => {
-          video.onloadedmetadata = () => {
-            console.log("Видео метаданные загружены");
-            video.play()
-              .then(() => {
-                console.log("Видео начало воспроизводиться");
-                resolve();
-              })
-              .catch(e => {
-                console.error("Ошибка воспроизведения видео:", e);
-                resolve();
-              });
-          };
-        });
-        
-        // Создаем текстуру из видео
-        console.log("Создаем текстуру из видео");
-        videoTexture = new THREE.VideoTexture(video);
-        videoTexture.minFilter = THREE.LinearFilter;
-        videoTexture.magFilter = THREE.LinearFilter;
-        videoTexture.format = THREE.RGBFormat;
-        
-        // Создаем материал и меш для видео
-        const videoMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
-        const videoGeometry = new THREE.PlaneGeometry(2, 2);
-        const videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
-        
-        // Устанавливаем размер видео
-        const adjustVideoSize = () => {
-          if (video.videoWidth && video.videoHeight) {
-            const videoAspect = video.videoWidth / video.videoHeight;
-            const screenAspect = window.innerWidth / window.innerHeight;
-            
-            if (videoAspect > screenAspect) {
-              videoMesh.scale.set(1, videoAspect / screenAspect, 1);
-            } else {
-              videoMesh.scale.set(screenAspect / videoAspect, 1, 1);
-            }
-          }
-        };
-        
-        video.addEventListener('loadedmetadata', adjustVideoSize);
-        adjustVideoSize();
-        
-        // Создаем отдельную сцену для видео
-        console.log("Создаем сцену для видео");
-        const videoScene = new THREE.Scene();
-        const videoCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-        videoScene.add(videoMesh);
-        
-        // Настраиваем рендеринг
-        renderer.autoClear = false;
-        
-        const originalRenderFunc = renderer.render;
-        renderer.render = function() {
-          renderer.clear();
-          originalRenderFunc.call(renderer, videoScene, videoCamera);
-          originalRenderFunc.call(renderer, scene, camera);
-        };
-        
-      } catch (error) {
-        console.error('Ошибка доступа к камере:', error);
-        showMessage('Ошибка доступа к камере: ' + error.message);
-        alert('Ошибка доступа к камере: ' + error.message);
+      // Показываем кнопку запуска камеры на мобильных устройствах
+      elements.startCameraButton.style.display = 'block';
+      elements.startCameraButton.onclick = async () => {
+        try {
+          await startCamera();
+          elements.startCameraButton.style.display = 'none';
+        } catch (error) {
+          console.error("Ошибка при запуске камеры:", error);
+          showError('Не удалось запустить камеру: ' + error.message);
+        }
+      };
+      
+      // На десктопе пытаемся запустить камеру автоматически
+      if (!isMobile()) {
+        try {
+          await startCamera();
+        } catch (error) {
+          console.error("Ошибка при автоматическом запуске камеры:", error);
+          elements.startCameraButton.style.display = 'block';
+        }
       }
+      
+      // Создаем группу для размещенных моделей
+      placedModelsGroup = new THREE.Group();
+      scene.add(placedModelsGroup);
     }
+  } catch (error) {
+    console.error('Ошибка при инициализации AR:', error);
+    showError('Ошибка AR: ' + error.message);
+  }
     
+  try {
     // Настраиваем рендерер
     renderer.outputEncoding = THREE.sRGBEncoding;
     renderer.physicallyCorrectLights = true;
@@ -339,7 +322,7 @@ async function initApp() {
     console.error('Ошибка инициализации:', error);
     showMessage('Ошибка инициализации AR: ' + error.message);
   }
-}
+  }
 
 // Инициализация QR-сканера
 function initQRScanner() {
@@ -764,6 +747,11 @@ function setupModelRotation() {
 // Настройка анимации
 function setupAnimation() {
   renderer.setAnimationLoop(() => {
+    // Обновляем видеотекстуру, если она существует
+    if (videoTexture && video && video.readyState === video.HAVE_ENOUGH_DATA) {
+      videoTexture.needsUpdate = true;
+    }
+    
     // Обновляем миксеры анимаций
     const delta = clock.getDelta();
     mixers.forEach(mixer => mixer.update(delta));
@@ -1345,6 +1333,112 @@ function showError(message) {
   } else {
     // Запасной вариант - предупреждение
     alert(message);
+  }
+}
+
+// Проверка мобильного устройства
+function isMobile() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+// Запуск камеры
+async function startCamera() {
+  console.log("Запрашиваем доступ к камере...");
+  showMessage('Запуск камеры...');
+  
+  try {
+    // Запрос доступа к камере с обработкой ошибок
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        facingMode: 'environment', // Задняя камера
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    });
+    
+    console.log("Доступ к камере получен");
+    showMessage('Камера запущена');
+    
+    // Настраиваем видеопоток
+    video.srcObject = stream;
+    
+    // Убедимся, что видео начало воспроизводиться
+    await new Promise((resolve) => {
+      video.onloadedmetadata = () => {
+        console.log("Видео метаданные загружены");
+        video.play()
+          .then(() => {
+            console.log("Видео начало воспроизводиться");
+            resolve();
+          })
+          .catch(e => {
+            console.error("Ошибка воспроизведения видео:", e);
+            resolve();
+          });
+      };
+      
+      // На случай, если onloadedmetadata не сработает
+      setTimeout(resolve, 1000);
+    });
+    
+    // Создаем текстуру из видео
+    console.log("Создаем текстуру из видео");
+    videoTexture = new THREE.VideoTexture(video);
+    videoTexture.minFilter = THREE.LinearFilter;
+    videoTexture.magFilter = THREE.LinearFilter;
+    videoTexture.format = THREE.RGBFormat;
+    
+    // Создаем материал для видео
+    const videoMaterial = new THREE.MeshBasicMaterial({ 
+      map: videoTexture,
+      side: THREE.DoubleSide, // Видно с обеих сторон
+    });
+    
+    // Создаем геометрию, которая перекрывает весь экран
+    const videoGeometry = new THREE.PlaneGeometry(4, 4); // Увеличиваем размер плоскости
+    const videoMesh = new THREE.Mesh(videoGeometry, videoMaterial);
+    
+    // Помещаем видеоплоскость позади всех объектов
+    videoMesh.position.z = -2;
+    
+    // Добавляем видеоплоскость прямо в основную сцену
+    scene.add(videoMesh);
+    
+    // Обновляем размер видео при изменении окна
+    const updateVideoMeshSize = () => {
+      if (video.videoWidth && video.videoHeight) {
+        const videoAspect = video.videoWidth / video.videoHeight;
+        const screenAspect = window.innerWidth / window.innerHeight;
+        
+        // Масштабируем видеоплоскость так, чтобы она заполняла весь экран
+        if (videoAspect > screenAspect) {
+          // Видео шире чем экран - масштабируем по высоте
+          const scale = 1 / camera.position.z * 2; // Учитываем позицию камеры
+          videoMesh.scale.set(videoAspect * scale, scale, 1);
+        } else {
+          // Видео уже чем экран - масштабируем по ширине
+          const scale = 1 / camera.position.z * 2; // Учитываем позицию камеры
+          videoMesh.scale.set(scale, scale / videoAspect, 1);
+        }
+      }
+    };
+    
+    video.addEventListener('loadedmetadata', updateVideoMeshSize);
+    window.addEventListener('resize', updateVideoMeshSize);
+    updateVideoMeshSize();
+    
+    // Настраиваем стандартный рендеринг
+    renderer.autoClear = true;
+    
+    // Запускаем сканирование QR-кодов
+    startQRScanning();
+    
+    return stream;
+  } catch (error) {
+    console.error("Ошибка доступа к камере:", error);
+    showError(`Ошибка доступа к камере: ${error.message}`);
+    throw error;
   }
 }
 
